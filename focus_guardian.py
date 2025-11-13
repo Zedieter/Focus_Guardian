@@ -721,10 +721,35 @@ Hard Mode prevents early stopping (enable in Settings)
         tk.Label(inner, text="Start:", bg='#ffffff', font=('Arial', 10, 'bold')).grid(row=0, column=2, sticky='w', padx=(20, 5))
         start_frame = tk.Frame(inner, bg='#ffffff')
         start_frame.grid(row=0, column=3, sticky='w')
-        
-        start_hour_var = tk.StringVar(value='9')
-        start_min_var = tk.StringVar(value='00')
-        start_period_var = tk.StringVar(value='AM')
+
+        start_hour_var = tk.StringVar()
+        start_min_var = tk.StringVar()
+        start_period_var = tk.StringVar()
+
+        if event_data and event_data.get('start'):
+            try:
+                hour_24, minute = map(int, event_data['start'].split(':'))
+                if hour_24 == 0:
+                    start_hour_var.set('12')
+                    start_period_var.set('AM')
+                elif hour_24 == 12:
+                    start_hour_var.set('12')
+                    start_period_var.set('PM')
+                elif hour_24 > 12:
+                    start_hour_var.set(str(hour_24 - 12))
+                    start_period_var.set('PM')
+                else:
+                    start_hour_var.set(str(hour_24))
+                    start_period_var.set('AM')
+                start_min_var.set(f"{minute:02d}")
+            except ValueError:
+                start_hour_var.set('9')
+                start_min_var.set('00')
+                start_period_var.set('AM')
+        else:
+            start_hour_var.set('9')
+            start_min_var.set('00')
+            start_period_var.set('AM')
         
         tk.Spinbox(start_frame, from_=1, to=12, textvariable=start_hour_var, width=3, font=('Arial', 10)).pack(side='left', padx=1)
         tk.Label(start_frame, text=":", font=('Arial', 10, 'bold'), bg='#ffffff').pack(side='left')
@@ -736,9 +761,34 @@ Hard Mode prevents early stopping (enable in Settings)
         end_frame = tk.Frame(inner, bg='#ffffff')
         end_frame.grid(row=0, column=5, sticky='w')
         
-        end_hour_var = tk.StringVar(value='10')
-        end_min_var = tk.StringVar(value='00')
-        end_period_var = tk.StringVar(value='AM')
+        end_hour_var = tk.StringVar()
+        end_min_var = tk.StringVar()
+        end_period_var = tk.StringVar()
+
+        if event_data and event_data.get('end'):
+            try:
+                hour_24, minute = map(int, event_data['end'].split(':'))
+                if hour_24 == 0:
+                    end_hour_var.set('12')
+                    end_period_var.set('AM')
+                elif hour_24 == 12:
+                    end_hour_var.set('12')
+                    end_period_var.set('PM')
+                elif hour_24 > 12:
+                    end_hour_var.set(str(hour_24 - 12))
+                    end_period_var.set('PM')
+                else:
+                    end_hour_var.set(str(hour_24))
+                    end_period_var.set('AM')
+                end_min_var.set(f"{minute:02d}")
+            except ValueError:
+                end_hour_var.set('10')
+                end_min_var.set('00')
+                end_period_var.set('AM')
+        else:
+            end_hour_var.set('10')
+            end_min_var.set('00')
+            end_period_var.set('AM')
         
         tk.Spinbox(end_frame, from_=1, to=12, textvariable=end_hour_var, width=3, font=('Arial', 10)).pack(side='left', padx=1)
         tk.Label(end_frame, text=":", font=('Arial', 10, 'bold'), bg='#ffffff').pack(side='left')
@@ -1365,9 +1415,12 @@ Hard Mode prevents early stopping (enable in Settings)
         
         if HAS_PYTZ:
             est = pytz.timezone('US/Eastern')
-            today = datetime.datetime.now(est).strftime("%A, %B %d, %Y")
+            now = datetime.datetime.now(est)
         else:
-            today = datetime.datetime.now().strftime("%A, %B %d, %Y")
+            now = datetime.datetime.now()
+
+        today = now.strftime("%A, %B %d, %Y")
+        today_name = now.strftime("%A")
         
         # Calculate number of meals to schedule
         meals_count = self.commitments['preferences'].get('meals_per_day', 3)
@@ -1413,7 +1466,15 @@ Hard Mode prevents early stopping (enable in Settings)
         prompt += "   - 'Exercise/Movement'\n"
         prompt += "   - 'Rest & Recovery'\n"
         prompt += "6. REMEMBER: NO GAPS ALLOWED - if there's 10 minutes between events, create a 10-minute block\n\n"
+        todays_events = [
+            event for event in self.commitments.get('weekly_events', [])
+            if event.get('day') == today_name
+        ]
+
         prompt += "USER DATA:\n" + json.dumps(self.commitments, indent=2) + "\n\n"
+        prompt += "TODAY'S MANDATORY WEEKLY EVENTS (keep these EXACT times):\n"
+        prompt += json.dumps(todays_events, indent=2) + "\n"
+        prompt += "If this list is empty there are no fixed events today. Otherwise, each event must appear exactly at its start and end times without overlap.\n\n"
         prompt += "TASKS TO SCHEDULE (ONLY THESE - DO NOT ADD ANY OTHERS):\n" + json.dumps(self.tasks, indent=2) + "\n\n"
         prompt += "SCHEDULE REQUIREMENTS:\n"
         prompt += f"- Start day at: {self.commitments['preferences']['wake_time']}\n"
@@ -1424,9 +1485,16 @@ Hard Mode prevents early stopping (enable in Settings)
         prompt += "- NO GAPS WHATSOEVER - Every minute must be in a block\n"
         prompt += "- Include morning routine at wake time\n"
         prompt += "- Include evening routine before sleep time\n"
-        prompt += "- Add the user's weekly recurring events if today is that day of week\n"
+        prompt += "- Add the user's weekly recurring events exactly at their listed times (see mandatory event list above)\n"
         prompt += "- For tasks: use the EXACT task name from the list\n"
         prompt += "- Mark deep work/study tasks as 'focus_required: true'\n\n"
+
+        if not self.tasks.get('tasks'):
+            focus_len = self.commitments['preferences']['focus_block_length']
+            break_len = self.commitments['preferences']['break_length']
+            prompt += (
+                f"SPECIAL INSTRUCTION: There are no one-time tasks today. Fill all non-meal, non-event time with repeated 'Focus Block' entries of {focus_len} minutes (focus_required: true) followed by {break_len}-minute breaks as needed. Do not create any other block types for these periods.\n\n"
+            )
         prompt += """OUTPUT FORMAT (JSON only, no markdown):
 {{
   "blocks": [
