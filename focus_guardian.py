@@ -122,9 +122,15 @@ class FocusGuardian:
                 "gym_frequency": 3,
                 "focus_block_length": 50,
                 "break_length": 10,
-                "meals_per_day": 3
+                "meals_per_day": 3,
+                "morning_routine_length": 30,
+                "evening_routine_length": 30
             }
         })
+
+        prefs = self.commitments.setdefault('preferences', {})
+        prefs.setdefault('morning_routine_length', 30)
+        prefs.setdefault('evening_routine_length', 30)
 
     def load_json(self, path, default):
         """Load JSON file or return default"""
@@ -721,10 +727,35 @@ Hard Mode prevents early stopping (enable in Settings)
         tk.Label(inner, text="Start:", bg='#ffffff', font=('Arial', 10, 'bold')).grid(row=0, column=2, sticky='w', padx=(20, 5))
         start_frame = tk.Frame(inner, bg='#ffffff')
         start_frame.grid(row=0, column=3, sticky='w')
-        
-        start_hour_var = tk.StringVar(value='9')
-        start_min_var = tk.StringVar(value='00')
-        start_period_var = tk.StringVar(value='AM')
+
+        start_hour_var = tk.StringVar()
+        start_min_var = tk.StringVar()
+        start_period_var = tk.StringVar()
+
+        if event_data and event_data.get('start'):
+            try:
+                hour_24, minute = map(int, event_data['start'].split(':'))
+                if hour_24 == 0:
+                    start_hour_var.set('12')
+                    start_period_var.set('AM')
+                elif hour_24 == 12:
+                    start_hour_var.set('12')
+                    start_period_var.set('PM')
+                elif hour_24 > 12:
+                    start_hour_var.set(str(hour_24 - 12))
+                    start_period_var.set('PM')
+                else:
+                    start_hour_var.set(str(hour_24))
+                    start_period_var.set('AM')
+                start_min_var.set(f"{minute:02d}")
+            except ValueError:
+                start_hour_var.set('9')
+                start_min_var.set('00')
+                start_period_var.set('AM')
+        else:
+            start_hour_var.set('9')
+            start_min_var.set('00')
+            start_period_var.set('AM')
         
         tk.Spinbox(start_frame, from_=1, to=12, textvariable=start_hour_var, width=3, font=('Arial', 10)).pack(side='left', padx=1)
         tk.Label(start_frame, text=":", font=('Arial', 10, 'bold'), bg='#ffffff').pack(side='left')
@@ -736,9 +767,34 @@ Hard Mode prevents early stopping (enable in Settings)
         end_frame = tk.Frame(inner, bg='#ffffff')
         end_frame.grid(row=0, column=5, sticky='w')
         
-        end_hour_var = tk.StringVar(value='10')
-        end_min_var = tk.StringVar(value='00')
-        end_period_var = tk.StringVar(value='AM')
+        end_hour_var = tk.StringVar()
+        end_min_var = tk.StringVar()
+        end_period_var = tk.StringVar()
+
+        if event_data and event_data.get('end'):
+            try:
+                hour_24, minute = map(int, event_data['end'].split(':'))
+                if hour_24 == 0:
+                    end_hour_var.set('12')
+                    end_period_var.set('AM')
+                elif hour_24 == 12:
+                    end_hour_var.set('12')
+                    end_period_var.set('PM')
+                elif hour_24 > 12:
+                    end_hour_var.set(str(hour_24 - 12))
+                    end_period_var.set('PM')
+                else:
+                    end_hour_var.set(str(hour_24))
+                    end_period_var.set('AM')
+                end_min_var.set(f"{minute:02d}")
+            except ValueError:
+                end_hour_var.set('10')
+                end_min_var.set('00')
+                end_period_var.set('AM')
+        else:
+            end_hour_var.set('10')
+            end_min_var.set('00')
+            end_period_var.set('AM')
         
         tk.Spinbox(end_frame, from_=1, to=12, textvariable=end_hour_var, width=3, font=('Arial', 10)).pack(side='left', padx=1)
         tk.Label(end_frame, text=":", font=('Arial', 10, 'bold'), bg='#ffffff').pack(side='left')
@@ -1365,9 +1421,12 @@ Hard Mode prevents early stopping (enable in Settings)
         
         if HAS_PYTZ:
             est = pytz.timezone('US/Eastern')
-            today = datetime.datetime.now(est).strftime("%A, %B %d, %Y")
+            now = datetime.datetime.now(est)
         else:
-            today = datetime.datetime.now().strftime("%A, %B %d, %Y")
+            now = datetime.datetime.now()
+
+        today = now.strftime("%A, %B %d, %Y")
+        today_name = now.strftime("%A")
         
         # Calculate number of meals to schedule
         meals_count = self.commitments['preferences'].get('meals_per_day', 3)
@@ -1406,14 +1465,20 @@ Hard Mode prevents early stopping (enable in Settings)
             
         prompt += "   Each meal should be 20-30 minutes\n"
         prompt += "   Meals can be scheduled flexibly between tasks/events\n"
-        prompt += "5. After scheduling tasks, recurring events, and meals, fill ALL remaining time with:\n"
-        prompt += "   - 'Free Time / Flexibility Buffer'\n"
-        prompt += "   - 'Personal Projects Time'\n"
-        prompt += "   - 'Catch-up / Admin Work'\n"
-        prompt += "   - 'Exercise/Movement'\n"
-        prompt += "   - 'Rest & Recovery'\n"
-        prompt += "6. REMEMBER: NO GAPS ALLOWED - if there's 10 minutes between events, create a 10-minute block\n\n"
+        prompt += "5. After scheduling tasks, recurring events, and meals, fill ALL remaining minutes with either:\n"
+        prompt += "   - Focus Blocks (title: 'Focus Block', focus_required: true)\n"
+        prompt += "   - Explicit task/todo reminders pulled from the task list\n"
+        prompt += "   Absolutely do NOT use labels like Free Time, Personal Projects, Buffer, Admin, or Rest.\n"
+        prompt += "6. REMEMBER: NO GAPS ALLOWED - if there's 10 minutes between events, create a 10-minute focus block or task reminder\n\n"
+        todays_events = [
+            event for event in self.commitments.get('weekly_events', [])
+            if event.get('day') == today_name
+        ]
+
         prompt += "USER DATA:\n" + json.dumps(self.commitments, indent=2) + "\n\n"
+        prompt += "TODAY'S MANDATORY WEEKLY EVENTS (keep these EXACT times):\n"
+        prompt += json.dumps(todays_events, indent=2) + "\n"
+        prompt += "If this list is empty there are no fixed events today. Otherwise, each event must appear exactly at its start and end times without overlap.\n\n"
         prompt += "TASKS TO SCHEDULE (ONLY THESE - DO NOT ADD ANY OTHERS):\n" + json.dumps(self.tasks, indent=2) + "\n\n"
         prompt += "SCHEDULE REQUIREMENTS:\n"
         prompt += f"- Start day at: {self.commitments['preferences']['wake_time']}\n"
@@ -1424,9 +1489,16 @@ Hard Mode prevents early stopping (enable in Settings)
         prompt += "- NO GAPS WHATSOEVER - Every minute must be in a block\n"
         prompt += "- Include morning routine at wake time\n"
         prompt += "- Include evening routine before sleep time\n"
-        prompt += "- Add the user's weekly recurring events if today is that day of week\n"
+        prompt += "- Add the user's weekly recurring events exactly at their listed times (see mandatory event list above)\n"
         prompt += "- For tasks: use the EXACT task name from the list\n"
         prompt += "- Mark deep work/study tasks as 'focus_required: true'\n\n"
+
+        if not self.tasks.get('tasks'):
+            focus_len = self.commitments['preferences']['focus_block_length']
+            break_len = self.commitments['preferences']['break_length']
+            prompt += (
+                f"SPECIAL INSTRUCTION: There are no one-time tasks today. Fill all non-meal, non-event time with repeated 'Focus Block' entries of {focus_len} minutes (focus_required: true) followed by {break_len}-minute breaks as needed. Do not create any other block types for these periods.\n\n"
+            )
         prompt += """OUTPUT FORMAT (JSON only, no markdown):
 {{
   "blocks": [
@@ -1447,9 +1519,9 @@ Hard Mode prevents early stopping (enable in Settings)
     {{
       "start": "08:00",
       "end": "09:00",
-      "type": "free_time",
-      "title": "Free Time / Flexibility Buffer",
-      "focus_required": false
+      "type": "focus",
+      "title": "Focus Block",
+      "focus_required": true
     }},
     {{
       "start": "09:00",
@@ -1496,7 +1568,7 @@ Remember:
             data = json.dumps({
                 "model": "gpt-4o-mini",
                 "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.7
+                "temperature": 0.0
             }).encode('utf-8')
             
             req = urllib.request.Request(
@@ -1520,6 +1592,7 @@ Remember:
                 content = content[:-3]
             
             self.schedule = json.loads(content.strip())
+            self.post_process_schedule(meals_count, todays_events)
             self.save_json(self.schedule_file, self.schedule)
             self.display_schedule()
             self.update_dashboard()
@@ -1539,6 +1612,860 @@ Remember:
             return f"{hour_12}:{minute:02d} {period}"
         except:
             return time_24
+
+    def parse_time_to_minutes(self, time_str):
+        """Convert HH:MM string to minutes since midnight"""
+        try:
+            hour, minute = map(int, time_str.split(':'))
+            return hour * 60 + minute
+        except Exception:
+            return 0
+
+    def minutes_to_time(self, minutes):
+        """Convert minutes since midnight to HH:MM string"""
+        try:
+            minutes = int(round(minutes))
+            minutes = minutes % (24 * 60)
+            hour = minutes // 60
+            minute = minutes % 60
+            return f"{hour:02d}:{minute:02d}"
+        except Exception:
+            return "00:00"
+
+    def normalize_minutes(self, value, wake_minutes, sleep_minutes, crosses_midnight):
+        """Map a clock value into the scheduling timeline respecting wraparound"""
+        if crosses_midnight and value < wake_minutes and value <= sleep_minutes:
+            return value + 24 * 60
+        return value
+
+    def normalize_window(self, start_minutes, end_minutes, wake_minutes, sleep_minutes, crosses_midnight):
+        """Normalize a start/end pair into a monotonically increasing window"""
+        start = self.normalize_minutes(start_minutes, wake_minutes, sleep_minutes, crosses_midnight)
+        end = self.normalize_minutes(end_minutes, wake_minutes, sleep_minutes, crosses_midnight)
+
+        if end <= start:
+            end += 24 * 60
+
+        return start, end
+
+    def get_expected_meal_titles(self, meals_count):
+        """Return ordered list of expected meal titles"""
+        mapping = {
+            1: ["Main Meal"],
+            2: ["Breakfast", "Dinner"],
+            3: ["Breakfast", "Lunch", "Dinner"],
+            4: ["Breakfast", "Snack/Brunch", "Lunch", "Dinner"],
+            5: [
+                "Breakfast",
+                "Mid-morning Snack",
+                "Lunch",
+                "Afternoon Snack",
+                "Dinner"
+            ],
+            6: [
+                "Breakfast",
+                "Mid-morning Snack",
+                "Lunch",
+                "Afternoon Snack",
+                "Dinner",
+                "Evening Snack"
+            ]
+        }
+        if meals_count in mapping:
+            return mapping[meals_count]
+        return [f"Meal {i + 1}" for i in range(max(meals_count, 0))]
+
+    def get_meal_ratios(self, meals_count):
+        """Return normalized placement ratios for meals throughout the day"""
+        ratio_map = {
+            1: [0.5],
+            2: [0.05, 0.75],
+            3: [0.05, 0.5, 0.82],
+            4: [0.04, 0.25, 0.55, 0.82],
+            5: [0.04, 0.22, 0.45, 0.68, 0.88],
+            6: [0.04, 0.2, 0.38, 0.58, 0.78, 0.9]
+        }
+        if meals_count in ratio_map:
+            return ratio_map[meals_count]
+        if meals_count <= 0:
+            return []
+        step = 0.85 / max(meals_count - 1, 1)
+        return [min(0.9, i * step) for i in range(meals_count)]
+
+    def calculate_meal_target(self, index, total, day_start, day_end):
+        """Calculate target minute for a meal placement"""
+        if total <= 0:
+            return day_start
+        ratios = self.get_meal_ratios(total)
+        ratio = ratios[index] if index < len(ratios) else index / max(total - 1, 1)
+        ratio = max(0.0, min(ratio, 0.95))
+        span = max(day_end - day_start, 1)
+        target = day_start + int(span * ratio)
+        target = max(day_start, min(target, day_end - 30))
+        return target - (target % 5)
+
+    def violates_meal_spacing(self, entries, start, end, min_gap, ignore_entry=None):
+        """Return True if placing a meal violates minimum spacing requirements"""
+        if min_gap <= 0:
+            return False
+        for entry in entries:
+            if entry is ignore_entry:
+                continue
+            block_type = (entry['block'].get('type') or '').lower()
+            if block_type != 'meal':
+                continue
+            if start >= entry['end']:
+                if start - entry['end'] < min_gap:
+                    return True
+            elif entry['start'] >= end:
+                if entry['start'] - end < min_gap:
+                    return True
+            else:
+                return True
+        return False
+
+    def compute_free_segments(self, entries, day_start, day_end):
+        """Compute gaps between entries that can host new blocks"""
+        segments = []
+        cursor = day_start
+        for entry in sorted(entries, key=lambda e: e['start']):
+            if entry['start'] - cursor >= 20:
+                segments.append((cursor, entry['start']))
+            cursor = max(cursor, entry['end'])
+        if day_end - cursor >= 20:
+            segments.append((cursor, day_end))
+        return segments
+
+    def insert_meal_entry(self, entries, target, title, day_start, day_end, min_gap=30, allow_focus_override=False):
+        """Insert a meal entry either in a free segment or by splitting a block"""
+        if day_end - day_start < 20:
+            return None
+
+        segments = self.compute_free_segments(entries, day_start, day_end)
+        best_candidate = None
+        best_distance = None
+
+        for seg_start, seg_end in segments:
+            if seg_end - seg_start < 20:
+                continue
+            placement_start = max(seg_start, min(target, seg_end - 30))
+            placement_start -= placement_start % 5
+            placement_end = placement_start + 30
+            if placement_end > seg_end:
+                placement_end = seg_end
+                placement_start = max(seg_start, placement_end - 30)
+            if placement_end - placement_start < 20:
+                continue
+            if self.violates_meal_spacing(entries, placement_start, placement_end, min_gap):
+                continue
+            distance = abs(placement_start - target)
+            if best_distance is None or distance < best_distance:
+                best_distance = distance
+                best_candidate = (placement_start, placement_end)
+
+        if best_candidate:
+            meal_block = {
+                'start': self.minutes_to_time(best_candidate[0]),
+                'end': self.minutes_to_time(best_candidate[1]),
+                'type': 'meal',
+                'title': title,
+                'focus_required': False
+            }
+            entry = {
+                'start': best_candidate[0],
+                'end': best_candidate[1],
+                'block': meal_block
+            }
+            entries.append(entry)
+            entries.sort(key=lambda e: e['start'])
+            return entry
+
+        filler_candidates = sorted(enumerate(entries), key=lambda item: item[1]['start'])
+        keywords = ['free', 'rest', 'buffer', 'flex', 'break', 'personal', 'catch', 'admin', 'exercise', 'transition', 'placeholder']
+        for idx, entry in filler_candidates:
+            block = entry['block']
+            block_type = (block.get('type') or '').lower()
+            if block_type in {'weekly_event', 'meal'}:
+                continue
+            if block.get('focus_required') and not allow_focus_override:
+                continue
+            convertible = any(keyword in block_type for keyword in keywords)
+            if not convertible and not allow_focus_override:
+                continue
+            duration = entry['end'] - entry['start']
+            if duration < 30:
+                continue
+
+            meal_start = max(entry['start'], min(target, entry['end'] - 30))
+            meal_start -= meal_start % 5
+            meal_end = meal_start + 30
+            if meal_end > entry['end']:
+                meal_end = entry['end']
+                meal_start = max(entry['start'], meal_end - 30)
+            if meal_end - meal_start < 20:
+                continue
+            if self.violates_meal_spacing(entries, meal_start, meal_end, min_gap, ignore_entry=entry):
+                continue
+
+            base_block = entry['block']
+            new_entries = []
+
+            if meal_start - entry['start'] >= 5:
+                before_block = dict(base_block)
+                before_block['start'] = self.minutes_to_time(entry['start'])
+                before_block['end'] = self.minutes_to_time(meal_start)
+                new_entries.append({
+                    'start': entry['start'],
+                    'end': meal_start,
+                    'block': before_block
+                })
+
+            meal_block = {
+                'start': self.minutes_to_time(meal_start),
+                'end': self.minutes_to_time(meal_end),
+                'type': 'meal',
+                'title': title,
+                'focus_required': False
+            }
+            meal_entry = {
+                'start': meal_start,
+                'end': meal_end,
+                'block': meal_block
+            }
+            new_entries.append(meal_entry)
+
+            if entry['end'] - meal_end >= 5:
+                after_block = dict(base_block)
+                after_block['start'] = self.minutes_to_time(meal_end)
+                after_block['end'] = self.minutes_to_time(entry['end'])
+                new_entries.append({
+                    'start': meal_end,
+                    'end': entry['end'],
+                    'block': after_block
+                })
+
+            entries.pop(idx)
+            for offset, new_entry in enumerate(new_entries):
+                entries.insert(idx + offset, new_entry)
+            entries.sort(key=lambda e: e['start'])
+            return meal_entry
+
+        candidate_blocks = [
+            (abs(((entry['start'] + entry['end']) / 2) - target), idx, entry)
+            for idx, entry in enumerate(entries)
+            if (entry['block'].get('type') or '').lower() not in {'weekly_event', 'meal'}
+            and (allow_focus_override or not entry['block'].get('focus_required'))
+        ]
+        candidate_blocks.sort(key=lambda item: item[0])
+
+        for _, idx, entry in candidate_blocks:
+            start = entry['start']
+            end = entry['end']
+            if end - start < 20:
+                continue
+            meal_start = max(start, min(target, end - 25))
+            meal_start -= meal_start % 5
+            meal_end = meal_start + 30
+            if meal_end > end:
+                meal_end = end
+                meal_start = max(start, meal_end - 30)
+            if meal_end - meal_start < 20:
+                continue
+            if self.violates_meal_spacing(entries, meal_start, meal_end, min_gap, ignore_entry=entry):
+                continue
+
+            base_block = entry['block']
+            entries.pop(idx)
+            new_entries = []
+
+            if meal_start - start >= 5:
+                before_block = dict(base_block)
+                before_block['start'] = self.minutes_to_time(start)
+                before_block['end'] = self.minutes_to_time(meal_start)
+                new_entries.append({
+                    'start': start,
+                    'end': meal_start,
+                    'block': before_block
+                })
+
+            meal_block = {
+                'start': self.minutes_to_time(meal_start),
+                'end': self.minutes_to_time(meal_end),
+                'type': 'meal',
+                'title': title,
+                'focus_required': False
+            }
+            meal_entry = {
+                'start': meal_start,
+                'end': meal_end,
+                'block': meal_block
+            }
+            new_entries.append(meal_entry)
+
+            if end - meal_end >= 5:
+                after_block = dict(base_block)
+                after_block['start'] = self.minutes_to_time(meal_end)
+                after_block['end'] = self.minutes_to_time(end)
+                new_entries.append({
+                    'start': meal_end,
+                    'end': end,
+                    'block': after_block
+                })
+
+            for offset, new_entry in enumerate(new_entries):
+                entries.insert(idx + offset, new_entry)
+            entries.sort(key=lambda e: e['start'])
+            return meal_entry
+
+        return None
+
+    def insert_fixed_block(self, entries, start, end, block):
+        """Insert an immovable block by trimming overlapping entries"""
+        if end - start <= 0:
+            return
+
+        adjusted_entries = []
+        for entry in entries:
+            if entry['end'] <= start or entry['start'] >= end:
+                adjusted_entries.append(entry)
+                continue
+
+            if entry['start'] < start:
+                before_block = dict(entry['block'])
+                if start - entry['start'] > 0:
+                    adjusted_entries.append({
+                        'start': entry['start'],
+                        'end': start,
+                        'block': before_block
+                    })
+
+            if entry['end'] > end:
+                after_block = dict(entry['block'])
+                if entry['end'] - end > 0:
+                    adjusted_entries.append({
+                        'start': end,
+                        'end': entry['end'],
+                        'block': after_block
+                    })
+
+        block_copy = dict(block)
+        adjusted_entries.append({
+            'start': start,
+            'end': end,
+            'block': block_copy
+        })
+
+        entries[:] = sorted(adjusted_entries, key=lambda e: e['start'])
+
+    def ensure_routines(self, entries, day_start, day_end):
+        """Guarantee morning and evening routines bookend the day"""
+        total_window = max(day_end - day_start, 0)
+        if total_window <= 0:
+            entries.clear()
+            return
+
+        morning_pref = self.commitments['preferences'].get('morning_routine_length', 30) or 30
+        evening_pref = self.commitments['preferences'].get('evening_routine_length', 30) or 30
+        morning_len = max(1, int(morning_pref))
+        evening_len = max(1, int(evening_pref))
+
+        if morning_len + evening_len > total_window:
+            scale = total_window / float(morning_len + evening_len)
+            morning_len = max(1, int(round(morning_len * scale)))
+            evening_len = max(1, int(round(evening_len * scale)))
+
+        if morning_len + evening_len > total_window:
+            overflow = morning_len + evening_len - total_window
+            reduce_evening = min(overflow, max(0, evening_len - 1))
+            evening_len -= reduce_evening
+            overflow -= reduce_evening
+            if overflow > 0 and morning_len > 1:
+                morning_len -= min(overflow, morning_len - 1)
+
+        morning_end = min(day_start + morning_len, day_end)
+        if day_end - morning_end < 1 and day_end - day_start >= 1:
+            morning_end = max(day_start, day_end - 1)
+
+        remaining_after_morning = max(day_end - morning_end, 0)
+        if remaining_after_morning >= 1:
+            evening_len = max(1, min(evening_len, remaining_after_morning))
+        else:
+            evening_len = 0
+        evening_start = day_end - evening_len
+
+        if evening_start < morning_end:
+            evening_start = morning_end
+
+        entries[:] = [
+            entry for entry in entries
+            if str(entry['block'].get('type', '')).lower() not in {'morning_routine', 'evening_routine'}
+        ]
+
+        if morning_end > day_start:
+            morning_block = {
+                'type': 'morning_routine',
+                'title': 'Morning Routine',
+                'focus_required': False
+            }
+            self.insert_fixed_block(entries, day_start, morning_end, morning_block)
+
+        if evening_start < day_end:
+            evening_block = {
+                'type': 'evening_routine',
+                'title': 'Evening Routine',
+                'focus_required': False
+            }
+            self.insert_fixed_block(entries, evening_start, day_end, evening_block)
+
+    def ensure_meal_coverage(self, entries, meals_count, day_start, day_end):
+        """Guarantee that the schedule contains the required number of meals"""
+        if meals_count <= 0:
+            entries[:] = [e for e in entries if (e['block'].get('type') or '').lower() != 'meal']
+            return
+
+        entries.sort(key=lambda e: e['start'])
+        entries[:] = [
+            entry for entry in entries
+            if (entry['block'].get('type') or '').lower() != 'meal'
+        ]
+        expected_titles = self.get_expected_meal_titles(meals_count)
+
+        for idx, title in enumerate(expected_titles):
+            target = self.calculate_meal_target(idx, len(expected_titles), day_start, day_end)
+            inserted = self.insert_meal_entry(entries, target, title, day_start, day_end, min_gap=35)
+            if not inserted:
+                inserted = self.insert_meal_entry(entries, target, title, day_start, day_end, min_gap=30, allow_focus_override=True)
+            if not inserted:
+                inserted = self.insert_meal_entry(entries, target, title, day_start, day_end, min_gap=25, allow_focus_override=True)
+            if not inserted:
+                self.insert_meal_entry(entries, target, title, day_start, day_end, min_gap=20, allow_focus_override=True)
+
+        entries.sort(key=lambda e: e['start'])
+        meal_entries = [e for e in entries if (e['block'].get('type') or '').lower() == 'meal']
+        meal_entries.sort(key=lambda e: e['start'])
+
+        if len(meal_entries) > len(expected_titles):
+            for extra in meal_entries[len(expected_titles):]:
+                extra['block']['type'] = 'focus_block'
+                extra['block']['title'] = 'Focus Block'
+                extra['block']['focus_required'] = True
+
+        meal_entries = [e for e in entries if (e['block'].get('type') or '').lower() == 'meal']
+        meal_entries.sort(key=lambda e: e['start'])
+
+        for idx, entry in enumerate(meal_entries):
+            if idx >= len(expected_titles):
+                break
+            entry['block']['title'] = expected_titles[idx]
+            entry['block']['type'] = 'meal'
+            entry['block']['focus_required'] = False
+
+    def enforce_weekly_events(self, entries, todays_events, day_start, day_end, wake_minutes, sleep_minutes, crosses_midnight):
+        """Ensure weekly recurring events are present at their exact times"""
+        if not todays_events:
+            return
+
+        for event in todays_events:
+            try:
+                raw_start = self.parse_time_to_minutes(event['start'])
+                raw_end = self.parse_time_to_minutes(event['end'])
+            except Exception:
+                continue
+
+            title = event.get('title') or 'Weekly Event'
+            event_start, event_end = self.normalize_window(
+                raw_start,
+                raw_end,
+                wake_minutes,
+                sleep_minutes,
+                crosses_midnight
+            )
+
+            event_start = max(day_start, event_start)
+            event_end = min(day_end, event_end)
+
+            if event_end - event_start < 5:
+                continue
+
+            adjusted_entries = []
+            for entry in entries:
+                if entry['end'] <= event_start or entry['start'] >= event_end:
+                    adjusted_entries.append(entry)
+                    continue
+
+                if entry['start'] < event_start:
+                    before_block = dict(entry['block'])
+                    adjusted_entries.append({
+                        'start': entry['start'],
+                        'end': event_start,
+                        'block': before_block
+                    })
+
+                if entry['end'] > event_end:
+                    after_block = dict(entry['block'])
+                    adjusted_entries.append({
+                        'start': event_end,
+                        'end': entry['end'],
+                        'block': after_block
+                    })
+
+            event_block = {
+                'type': 'weekly_event',
+                'title': title,
+                'focus_required': False,
+                'start': self.minutes_to_time(event_start),
+                'end': self.minutes_to_time(event_end)
+            }
+            adjusted_entries.append({
+                'start': event_start,
+                'end': event_end,
+                'block': event_block
+            })
+
+            entries[:] = sorted(adjusted_entries, key=lambda e: e['start'])
+
+    def is_fixed_block(self, block):
+        """Return True if the block's start time should not be shifted"""
+        block_type = str(block.get('type', '')).lower()
+        if block_type in {'weekly_event', 'meal', 'morning_routine', 'evening_routine'}:
+            return True
+        return False
+
+    def apply_task_duration_constraints(self, entries):
+        """Clamp task/todo blocks to their saved durations and push flex time if needed"""
+        task_map = {}
+        for task in self.tasks.get('tasks', []):
+            name = task.get('name', '').strip().lower()
+            duration = int(task.get('duration', 0) or 0)
+            if name and duration > 0:
+                task_map[name] = duration
+
+        if not task_map:
+            return
+
+        entries.sort(key=lambda e: e['start'])
+
+        for idx, entry in enumerate(entries):
+            block = entry['block']
+            block_type = str(block.get('type', '')).lower()
+            title = str(block.get('title', '')).strip().lower()
+
+            if block_type not in {'task', 'todo'} and title not in task_map:
+                continue
+
+            duration = task_map.get(title)
+            if not duration:
+                continue
+
+            desired_end = entry['start'] + duration
+            if desired_end <= entry['start']:
+                continue
+
+            entry['end'] = desired_end
+
+            current_end = entry['end']
+            for next_idx in range(idx + 1, len(entries)):
+                next_entry = entries[next_idx]
+                if next_entry['start'] >= current_end:
+                    break
+
+                overlap = current_end - next_entry['start']
+                if overlap <= 0:
+                    break
+
+                if self.is_fixed_block(next_entry['block']):
+                    entry['end'] = next_entry['start']
+                    current_end = entry['end']
+                    break
+
+                next_entry['start'] += overlap
+                next_entry['end'] += overlap
+                current_end = max(current_end, next_entry['end'])
+
+
+    def create_focus_entry(self, start, end, title='Focus Block'):
+        """Create a focus block entry covering [start, end) minutes"""
+        block = {
+            'type': 'focus_block',
+            'title': title or 'Focus Block',
+            'focus_required': True
+        }
+        return {
+            'start': start,
+            'end': end,
+            'block': block
+        }
+
+    def create_free_time_entry(self, start, end, title='Free Time'):
+        """Create a free time entry covering [start, end) minutes"""
+        block = {
+            'type': 'freetime',
+            'title': title or 'Free Time',
+            'focus_required': False
+        }
+        return {
+            'start': start,
+            'end': end,
+            'block': block
+        }
+
+    def is_focus_block(self, block):
+        """Return True if the block should be treated as focus time"""
+        block_type = str(block.get('type', '')).lower()
+        return block_type in {'focus_block', 'focus_placeholder', 'focus'}
+
+    def build_focus_sequence(self, start, end):
+        """Generate focus, break, and free-time blocks to span [start, end)"""
+        focus_len = max(5, int(self.commitments['preferences'].get('focus_block_length', 50)))
+        break_len = max(0, int(self.commitments['preferences'].get('break_length', 0)))
+
+        segments = []
+        cursor = start
+
+        while cursor + focus_len <= end - 1e-6:
+            block_end = cursor + focus_len
+            segments.append(self.create_focus_entry(cursor, block_end))
+            cursor = block_end
+
+            remaining = end - cursor
+            if break_len > 0 and remaining >= break_len + focus_len:
+                break_end = cursor + break_len
+                segments.append(self.create_free_time_entry(cursor, break_end))
+                cursor = break_end
+
+        if cursor < end - 1e-6:
+            segments.append(self.create_free_time_entry(cursor, end))
+
+        return segments
+
+    def fill_gaps_with_focus(self, entries, day_start, day_end):
+        """Fill uncovered time with focus blocks (and free time for leftovers)"""
+        entries.sort(key=lambda e: e['start'])
+        new_entries = []
+        cursor = day_start
+
+        for entry in entries:
+            start = max(entry['start'], day_start)
+            end = min(entry['end'], day_end)
+
+            if end <= start:
+                continue
+
+            if start > cursor:
+                new_entries.extend(self.build_focus_sequence(cursor, start))
+                cursor = start
+            else:
+                start = max(start, cursor)
+
+            block = entry['block']
+            if self.is_focus_block(block):
+                focus_segments = self.build_focus_sequence(start, end)
+                new_entries.extend(focus_segments)
+            else:
+                entry['start'] = start
+                entry['end'] = end
+                new_entries.append(entry)
+
+            cursor = max(cursor, end)
+
+        if cursor < day_end:
+            new_entries.extend(self.build_focus_sequence(cursor, day_end))
+
+        entries[:] = new_entries
+
+    def sanitize_filler_blocks(self, blocks):
+        """Normalize filler-style blocks while keeping intentional free time"""
+        filler_keywords = [
+            'free', 'personal', 'project', 'buffer', 'catch', 'admin', 'rest',
+            'recovery', 'flex', 'exercise', 'movement', 'leisure', 'downtime',
+            'placeholder', 'unwind', 'relax', 'misc'
+        ]
+        protected_types = {
+            'meal', 'weekly_event', 'morning_routine', 'evening_routine', 'freetime', 'focus_block'
+        }
+
+        task_titles = {
+            task.get('name', '').strip().lower()
+            for task in self.tasks.get('tasks', [])
+        }
+
+        for block in blocks:
+            block_type = str(block.get('type', '')).lower()
+            raw_title = str(block.get('title', '')).strip()
+            title = raw_title.lower()
+
+            if block_type in protected_types:
+                continue
+            if block.get('focus_required'):
+                continue
+            if block_type.startswith('task') or 'todo' in block_type:
+                continue
+            if 'todo' in title or 'task' in title:
+                continue
+            if title.strip().lower() in task_titles:
+                block['type'] = 'todo'
+                block.setdefault('focus_required', False)
+                continue
+
+            if any(keyword in block_type for keyword in filler_keywords) or any(keyword in title for keyword in filler_keywords):
+                if 'free' in block_type or 'free' in title:
+                    block['type'] = 'freetime'
+                    block['title'] = raw_title or 'Free Time'
+                    block['focus_required'] = False
+                else:
+                    block['type'] = 'focus_block'
+                    block['title'] = 'Focus Block'
+                    block['focus_required'] = True
+
+    def normalize_focus_blocks(self, blocks):
+        """Ensure non-event blocks default to focus work unless explicitly tasks"""
+        task_titles = {
+            task.get('name', '').strip().lower()
+            for task in self.tasks.get('tasks', [])
+        }
+
+        for block in blocks:
+            block_type = str(block.get('type', '')).lower()
+            title = str(block.get('title', '')).strip()
+            title_lower = title.lower()
+
+            if block_type == 'freetime':
+                block['title'] = title or 'Free Time'
+                block['focus_required'] = False
+                continue
+
+            if block_type in {'meal', 'weekly_event', 'morning_routine', 'evening_routine'}:
+                block['focus_required'] = False
+                if not title:
+                    default_titles = {
+                        'meal': 'Meal',
+                        'weekly_event': 'Weekly Event',
+                        'morning_routine': 'Morning Routine',
+                        'evening_routine': 'Evening Routine'
+                    }
+                    block['title'] = default_titles.get(block_type, title)
+                continue
+
+            if block_type.startswith('task') or 'todo' in block_type:
+                block.setdefault('focus_required', False)
+                continue
+
+            if title_lower in task_titles:
+                block['type'] = 'todo'
+                block.setdefault('focus_required', False)
+                continue
+
+            if 'todo' in title_lower or 'task' in title_lower:
+                block['type'] = 'todo'
+                block.setdefault('focus_required', False)
+                continue
+
+            block['type'] = 'focus_block'
+            block['title'] = title or 'Focus Block'
+            block['focus_required'] = True
+
+    def post_process_schedule(self, meals_count, todays_events=None):
+        """Sort, clip, and adjust the generated schedule"""
+        todays_events = todays_events or []
+        wake_time = self.commitments['preferences'].get('wake_time', '07:00')
+        sleep_time = self.commitments['preferences'].get('sleep_time', '23:00')
+        wake_minutes = self.parse_time_to_minutes(wake_time)
+        sleep_minutes = self.parse_time_to_minutes(sleep_time)
+
+        day_start = wake_minutes
+        day_end = sleep_minutes
+        crosses_midnight = False
+
+        if day_end <= day_start:
+            day_end += 24 * 60
+            crosses_midnight = True
+
+        if todays_events:
+            earliest = day_start
+            latest = day_end
+            for event in todays_events:
+                try:
+                    raw_start = self.parse_time_to_minutes(event['start'])
+                    raw_end = self.parse_time_to_minutes(event['end'])
+                except Exception:
+                    continue
+
+                event_start, event_end = self.normalize_window(
+                    raw_start,
+                    raw_end,
+                    wake_minutes,
+                    sleep_minutes,
+                    crosses_midnight
+                )
+
+                earliest = min(earliest, event_start)
+                latest = max(latest, event_end)
+
+            day_start = min(day_start, earliest)
+            day_end = max(day_end, latest)
+
+        raw_blocks = self.schedule.get('blocks', [])
+        entries = []
+
+        for block in raw_blocks:
+            try:
+                raw_start = self.parse_time_to_minutes(block['start'])
+                raw_end = self.parse_time_to_minutes(block['end'])
+            except Exception:
+                continue
+
+            start, end = self.normalize_window(
+                raw_start,
+                raw_end,
+                wake_minutes,
+                sleep_minutes,
+                crosses_midnight
+            )
+
+            start_clamped = max(start, day_start)
+            end_clamped = min(end, day_end)
+
+            if end_clamped - start_clamped < 1:
+                continue
+
+            block_copy = dict(block)
+            entries.append({
+                'start': start_clamped,
+                'end': end_clamped,
+                'block': block_copy
+            })
+
+        entries.sort(key=lambda e: e['start'])
+
+        self.enforce_weekly_events(
+            entries,
+            todays_events,
+            day_start,
+            day_end,
+            wake_minutes,
+            sleep_minutes,
+            crosses_midnight
+        )
+
+        self.ensure_routines(entries, day_start, day_end)
+
+        self.apply_task_duration_constraints(entries)
+
+        self.ensure_meal_coverage(entries, meals_count, day_start, day_end)
+
+        self.fill_gaps_with_focus(entries, day_start, day_end)
+
+        entries.sort(key=lambda e: e['start'])
+        new_blocks = []
+        for entry in entries:
+            block = entry['block']
+            block['start'] = self.minutes_to_time(entry['start'])
+            block['end'] = self.minutes_to_time(entry['end'])
+            new_blocks.append(block)
+
+        self.sanitize_filler_blocks(new_blocks)
+        self.normalize_focus_blocks(new_blocks)
+        self.schedule['blocks'] = new_blocks
 
     def display_schedule(self):
         """Display the current schedule"""
