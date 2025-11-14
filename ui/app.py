@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, messagebox, scrolledtext, simpledialog
+from tkinter import ttk, messagebox, simpledialog
 import json
 import datetime
 import threading
@@ -7,7 +7,12 @@ import time
 from pathlib import Path
 import hashlib
 
+from ui.dashboard_tab import DashboardTab
+from ui.focus_tab import FocusLockTab
 from ui.planner_tab import PlannerTab
+from ui.schedule_tab import ScheduleTab
+from ui.settings_tab import SettingsTab
+from ui.stats_tab import StatsTab
 
 try:
     import pytz
@@ -160,285 +165,22 @@ class FocusGuardian:
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(fill='both', expand=True, padx=0, pady=0)
         
-        self.create_dashboard_tab()
-        self.create_focus_tab()
+        self.dashboard_tab = DashboardTab(self)
+        self.dashboard_tab.create()
+        self.focus_tab = FocusLockTab(self)
+        self.focus_tab.create()
         self.create_planner_tab()
         self.create_schedule_tab()
-        self.create_stats_tab()
-        self.create_settings_tab()
-
-    def create_dashboard_tab(self):
-        """Dashboard overview tab"""
-        tab = tk.Frame(self.notebook, bg=self.colors['bg'])
-        self.notebook.add(tab, text="📊 Dashboard")
-        
-        header = tk.Frame(tab, bg=self.colors['primary'], height=80)
-        header.pack(fill='x')
-        header.pack_propagate(False)
-        
-        title = tk.Label(
-            header, 
-            text="Focus Guardian",
-            font=('Arial', 24, 'bold'),
-            bg=self.colors['primary'],
-            fg='white'
-        )
-        title.pack(pady=20)
-        
-        content = tk.Frame(tab, bg=self.colors['bg'])
-        content.pack(fill='both', expand=True, padx=30, pady=30)
-        
-        stats_row = tk.Frame(content, bg=self.colors['bg'])
-        stats_row.pack(fill='x', pady=(0, 20))
-        
-        self.create_stat_card(
-            stats_row, 
-            "⏱️ Total Focus Time",
-            f"{self.stats['total_focus_time'] // 60}h {self.stats['total_focus_time'] % 60}m",
-            self.colors['primary']
-        ).pack(side='left', fill='both', expand=True, padx=5)
-        
-        self.create_stat_card(
-            stats_row,
-            "✅ Sessions Completed",
-            str(self.stats['sessions_completed']),
-            self.colors['success']
-        ).pack(side='left', fill='both', expand=True, padx=5)
-        
-        self.create_stat_card(
-            stats_row,
-            "🔥 Current Streak",
-            f"{self.stats['current_streak']} days",
-            self.colors['warning']
-        ).pack(side='left', fill='both', expand=True, padx=5)
-        
-        schedule_card = tk.Frame(content, bg=self.colors['card'], relief='solid', bd=1)
-        schedule_card.pack(fill='both', expand=True, pady=10)
-        
-        tk.Label(
-            schedule_card,
-            text="📅 Today's Schedule Preview",
-            font=('Arial', 14, 'bold'),
-            bg=self.colors['card'],
-            fg=self.colors['text']
-        ).pack(pady=15, padx=15, anchor='w')
-        
-        self.dashboard_schedule = scrolledtext.ScrolledText(
-            schedule_card,
-            height=10,
-            font=('Consolas', 10),
-            wrap='word',
-            bg='#f8fafc',
-            relief='flat'
-        )
-        self.dashboard_schedule.pack(fill='both', expand=True, padx=15, pady=(0, 15))
-        
-        actions = tk.Frame(content, bg=self.colors['bg'])
-        actions.pack(fill='x', pady=10)
-        
-        tk.Button(
-            actions,
-            text="🚀 Start Quick Focus",
-            command=lambda: self.quick_focus(25),
-            font=('Arial', 12, 'bold'),
-            bg=self.colors['primary'],
-            fg='white',
-            padx=20,
-            pady=12,
-            relief='flat',
-            cursor='hand2'
-        ).pack(side='left', padx=5)
-        
-        tk.Button(
-            actions,
-            text="🤖 Generate Today's Plan",
-            command=self.generate_daily_plan,
-            font=('Arial', 12, 'bold'),
-            bg=self.colors['info'],
-            fg='white',
-            padx=20,
-            pady=12,
-            relief='flat',
-            cursor='hand2'
-        ).pack(side='left', padx=5)
-        
-        self.update_dashboard()
-
-    def create_stat_card(self, parent, title, value, color):
-        """Create a statistics card"""
-        card = tk.Frame(parent, bg=self.colors['card'], relief='solid', bd=1)
-        
-        inner = tk.Frame(card, bg=color)
-        inner.pack(fill='x')
-        
-        tk.Label(
-            inner,
-            text=title,
-            font=('Arial', 10),
-            bg=color,
-            fg='white'
-        ).pack(pady=(10, 5))
-        
-        tk.Label(
-            card,
-            text=value,
-            font=('Arial', 24, 'bold'),
-            bg=self.colors['card'],
-            fg=self.colors['text']
-        ).pack(pady=15)
-        
-        return card
-
-    def update_dashboard(self):
-        """Update dashboard with current data"""
-        self.dashboard_schedule.delete('1.0', 'end')
-        
-        if not self.schedule.get('blocks'):
-            self.dashboard_schedule.insert('1.0', "No schedule for today.\nClick 'Generate Today's Plan' to create one!")
-        else:
-            now = datetime.datetime.now()
-            current_time = now.strftime("%H:%M")
-            
-            for block in self.schedule['blocks'][:6]:
-                start_12 = self.convert_to_12hr(block['start'])
-                end_12 = self.convert_to_12hr(block['end'])
-                
-                if block['start'] <= current_time < block['end']:
-                    prefix = "▶️ "
-                else:
-                    prefix = "   "
-                
-                icon = "🔒" if block.get('focus_required') else "⏰"
-                self.dashboard_schedule.insert('end', f"{prefix}{icon} {start_12} - {end_12}: {block['title']}\n")
+        self.stats_tab = StatsTab(self)
+        self.stats_tab.create()
+        self.settings_tab = SettingsTab(self)
+        self.settings_tab.create()
 
     def quick_focus(self, minutes):
         """Quick focus session from dashboard"""
         self.duration_var.set(str(minutes))
         self.notebook.select(1)
         self.start_focus_session()
-
-    def create_focus_tab(self):
-        """Main focus lock tab"""
-        tab = tk.Frame(self.notebook, bg=self.colors['bg'])
-        self.notebook.add(tab, text="🔒 Focus Lock")
-        
-        title_frame = tk.Frame(tab, bg=self.colors['card'])
-        title_frame.pack(fill='x', pady=(20, 0), padx=20)
-        
-        title = tk.Label(
-            title_frame,
-            text="Focus Session",
-            font=('Arial', 28, 'bold'),
-            bg=self.colors['card'],
-            fg=self.colors['text']
-        )
-        title.pack(pady=20)
-        
-        self.status_frame = tk.Frame(tab, bg='#e0e7ff', relief='flat', bd=0)
-        self.status_frame.pack(pady=20, padx=40, fill='x', ipady=20)
-        
-        self.status_label = tk.Label(
-            self.status_frame, 
-            text="✨ Ready to Focus\nNo active session",
-            font=('Arial', 16),
-            bg='#e0e7ff',
-            fg=self.colors['text']
-        )
-        self.status_label.pack(pady=15)
-        
-        duration_frame = tk.Frame(tab, bg=self.colors['bg'])
-        duration_frame.pack(pady=30)
-        
-        tk.Label(
-            duration_frame,
-            text="Choose Focus Duration:",
-            font=('Arial', 13),
-            bg=self.colors['bg'],
-            fg=self.colors['text']
-        ).pack(pady=(0, 10))
-        
-        button_row = tk.Frame(duration_frame, bg=self.colors['bg'])
-        button_row.pack()
-        
-        self.duration_var = tk.StringVar(value="25")
-        
-        for duration in ["25", "50", "90", "120"]:
-            btn = tk.Radiobutton(
-                button_row,
-                text=f"{duration} min",
-                variable=self.duration_var,
-                value=duration,
-                font=('Arial', 11, 'bold'),
-                bg=self.colors['card'],
-                fg=self.colors['text'],
-                selectcolor=self.colors['primary'],
-                indicatoron=False,
-                width=10,
-                relief='flat',
-                padx=15,
-                pady=10,
-                cursor='hand2'
-            )
-            btn.pack(side='left', padx=5)
-        
-        button_frame = tk.Frame(tab, bg=self.colors['bg'])
-        button_frame.pack(pady=30)
-        
-        self.start_btn = tk.Button(
-            button_frame,
-            text="🚀 Start Focus Session",
-            command=self.start_focus_session,
-            font=('Arial', 16, 'bold'),
-            bg=self.colors['success'],
-            fg='white',
-            padx=40,
-            pady=20,
-            relief='flat',
-            cursor='hand2',
-            borderwidth=0
-        )
-        self.start_btn.pack(side='left', padx=10)
-        
-        self.stop_btn = tk.Button(
-            button_frame,
-            text="⏹️ Stop Session",
-            command=self.stop_focus_session,
-            font=('Arial', 16, 'bold'),
-            bg=self.colors['danger'],
-            fg='white',
-            padx=40,
-            pady=20,
-            relief='flat',
-            cursor='hand2',
-            state='disabled',
-            borderwidth=0
-        )
-        self.stop_btn.pack(side='left', padx=10)
-        
-        info_card = tk.Frame(tab, bg=self.colors['card'], relief='solid', bd=1)
-        info_card.pack(pady=20, padx=60, fill='x')
-        
-        info_text = """
-    Focus Lock Features:
-
-Blocks distracting websites (YouTube, Reddit, TikTok, etc.)
-Blocks specified applications  
-Timer-based sessions with countdown
-Re-enables access automatically when done
-Hard Mode prevents early stopping (enable in Settings)
-        """
-        info = tk.Label(
-            info_card,
-            text=info_text,
-            font=('Arial', 11),
-            justify='left',
-            bg=self.colors['card'],
-            fg=self.colors['text_light']
-        )
-        info.pack(pady=20, padx=20)
-        
-        if self.lock_active:
-            self.update_focus_ui()
 
     def create_planner_tab(self):
         """Create the AI planner tab using the PlannerTab helper"""
@@ -457,179 +199,6 @@ Hard Mode prevents early stopping (enable in Settings)
 
 
 
-    def create_stats_tab(self):
-        """Statistics and achievements tab"""
-        tab = tk.Frame(self.notebook, bg=self.colors['bg'])
-        self.notebook.add(tab, text="📈 Stats")
-        
-        header = tk.Frame(tab, bg=self.colors['card'])
-        header.pack(fill='x', pady=(20, 0), padx=20)
-        
-        tk.Label(
-            header,
-            text="Your Progress & Achievements",
-            font=('Arial', 24, 'bold'),
-            bg=self.colors['card'],
-            fg=self.colors['text']
-        ).pack(pady=20)
-        
-        stats_grid = tk.Frame(tab, bg=self.colors['bg'])
-        stats_grid.pack(fill='both', expand=True, padx=30, pady=20)
-        
-        row1 = tk.Frame(stats_grid, bg=self.colors['bg'])
-        row1.pack(fill='x', pady=10)
-        
-        self.create_large_stat_card(
-            row1,
-            "⏱️ Total Focus Time",
-            f"{self.stats['total_focus_time'] // 60}h {self.stats['total_focus_time'] % 60}m",
-            "Time spent in deep focus",
-            self.colors['primary']
-        ).pack(side='left', fill='both', expand=True, padx=10)
-        
-        self.create_large_stat_card(
-            row1,
-            "✅ Sessions Completed",
-            str(self.stats['sessions_completed']),
-            "Successful focus sessions",
-            self.colors['success']
-        ).pack(side='left', fill='both', expand=True, padx=10)
-        
-        row2 = tk.Frame(stats_grid, bg=self.colors['bg'])
-        row2.pack(fill='x', pady=10)
-        
-        self.create_large_stat_card(
-            row2,
-            "🔥 Current Streak",
-            f"{self.stats['current_streak']} days",
-            "Consecutive days of focus",
-            self.colors['warning']
-        ).pack(side='left', fill='both', expand=True, padx=10)
-        
-        self.create_large_stat_card(
-            row2,
-            "🏆 Longest Streak",
-            f"{self.stats['longest_streak']} days",
-            "Your personal best",
-            self.colors['info']
-        ).pack(side='left', fill='both', expand=True, padx=10)
-        
-        achievements = tk.Frame(tab, bg=self.colors['card'], relief='solid', bd=1)
-        achievements.pack(fill='x', padx=30, pady=20)
-        
-        tk.Label(
-            achievements,
-            text="🎖️ Achievements",
-            font=('Arial', 16, 'bold'),
-            bg=self.colors['card'],
-            fg=self.colors['text']
-        ).pack(pady=15, padx=15, anchor='w')
-        
-        badge_frame = tk.Frame(achievements, bg=self.colors['card'])
-        badge_frame.pack(fill='x', padx=20, pady=(0, 20))
-        
-        self.show_achievement_badges(badge_frame)
-        
-        tk.Button(
-            tab,
-            text="🔄 Reset Statistics",
-            command=self.reset_stats,
-            font=('Arial', 10),
-            bg=self.colors['danger'],
-            fg='white',
-            padx=20,
-            pady=10,
-            relief='flat',
-            cursor='hand2'
-        ).pack(pady=10)
-
-    def create_large_stat_card(self, parent, title, value, subtitle, color):
-        """Create a large statistics card"""
-        card = tk.Frame(parent, bg=self.colors['card'], relief='solid', bd=1)
-        
-        header = tk.Frame(card, bg=color, height=10)
-        header.pack(fill='x')
-        header.pack_propagate(False)
-        
-        tk.Label(
-            card,
-            text=title,
-            font=('Arial', 12, 'bold'),
-            bg=self.colors['card'],
-            fg=self.colors['text']
-        ).pack(pady=(15, 5))
-        
-        tk.Label(
-            card,
-            text=value,
-            font=('Arial', 32, 'bold'),
-            bg=self.colors['card'],
-            fg=color
-        ).pack(pady=10)
-        
-        tk.Label(
-            card,
-            text=subtitle,
-            font=('Arial', 9),
-            bg=self.colors['card'],
-            fg=self.colors['text_light']
-        ).pack(pady=(0, 15))
-        
-        return card
-
-    def show_achievement_badges(self, parent):
-        """Display achievement badges"""
-        achievements = [
-            ("🌱", "First Step", self.stats['sessions_completed'] >= 1, "Complete your first session"),
-            ("💪", "Consistent", self.stats['current_streak'] >= 3, "3 day streak"),
-            ("🔥", "On Fire", self.stats['current_streak'] >= 7, "7 day streak"),
-            ("⭐", "Focused", self.stats['total_focus_time'] >= 300, "5+ hours of focus"),
-            ("🏆", "Master", self.stats['sessions_completed'] >= 50, "50+ sessions"),
-        ]
-        
-        for emoji, name, unlocked, desc in achievements:
-            # Badge container
-            badge_container = tk.Frame(parent, bg=self.colors['card'])
-            badge_container.pack(side='left', padx=15, pady=10)
-            
-            # Badge card
-            badge_card = tk.Frame(
-                badge_container,
-                bg='#10b981' if unlocked else '#e5e7eb',
-                relief='solid',
-                bd=2,
-                width=100,
-                height=100
-            )
-            badge_card.pack()
-            badge_card.pack_propagate(False)
-            
-            # Emoji
-            tk.Label(
-                badge_card,
-                text=emoji,
-                font=('Arial', 36),
-                bg='#10b981' if unlocked else '#e5e7eb'
-            ).pack(expand=True)
-            
-            # Name
-            tk.Label(
-                badge_container,
-                text=name,
-                font=('Arial', 10, 'bold'),
-                fg=self.colors['text'],
-                bg=self.colors['card']
-            ).pack(pady=(5, 2))
-            
-            # Description
-            tk.Label(
-                badge_container,
-                text=desc,
-                font=('Arial', 8),
-                fg=self.colors['text_light'],
-                bg=self.colors['card']
-            ).pack()
-
     def reset_stats(self):
         """Reset all statistics"""
         if messagebox.askyesno("Reset Stats", "Are you sure you want to reset all statistics?"):
@@ -642,81 +211,8 @@ Hard Mode prevents early stopping (enable in Settings)
             }
             self.save_json(self.stats_file, self.stats)
             self.notebook.select(0)
-            self.update_dashboard()
+            self.dashboard_tab.update_dashboard()
             messagebox.showinfo("Stats Reset", "All statistics have been reset!")
-
-    def create_settings_tab(self):
-        """Settings and configuration tab"""
-        tab = ttk.Frame(self.notebook)
-        self.notebook.add(tab, text="⚙️ Settings")
-        
-        canvas = tk.Canvas(tab)
-        scrollbar = ttk.Scrollbar(tab, orient="vertical", command=canvas.yview)
-        scrollable_frame = ttk.Frame(canvas)
-        
-        scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-        )
-        
-        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-        
-        tk.Label(scrollable_frame, text="Blocked Websites", font=('Arial', 12, 'bold')).pack(pady=10)
-        self.sites_text = scrolledtext.ScrolledText(scrollable_frame, height=8, font=('Arial', 10))
-        self.sites_text.pack(fill='x', padx=20)
-        self.sites_text.insert('1.0', '\n'.join(self.config['blocked_sites']))
-        
-        tk.Label(scrollable_frame, text="Blocked Applications", font=('Arial', 12, 'bold')).pack(pady=10)
-        self.apps_text = scrolledtext.ScrolledText(scrollable_frame, height=8, font=('Arial', 10))
-        self.apps_text.pack(fill='x', padx=20)
-        self.apps_text.insert('1.0', '\n'.join(self.config['blocked_apps']))
-        
-        self.hard_mode_var = tk.BooleanVar(value=self.config['hard_mode'])
-        hard_mode_check = tk.Checkbutton(
-            scrollable_frame,
-            text="Hard Mode (Cannot stop sessions early)",
-            variable=self.hard_mode_var,
-            font=('Arial', 11, 'bold'),
-            fg='#f44336'
-        )
-        hard_mode_check.pack(pady=10)
-        
-        tk.Label(scrollable_frame, text="OpenAI API Key", font=('Arial', 12, 'bold')).pack(pady=10)
-        self.api_key_entry = tk.Entry(scrollable_frame, width=50, show='*', font=('Arial', 10))
-        self.api_key_entry.pack()
-        self.api_key_entry.insert(0, self.config.get('api_key', ''))
-        
-        tk.Label(scrollable_frame, text="Settings Password", font=('Arial', 12, 'bold')).pack(pady=10)
-        password_frame = tk.Frame(scrollable_frame)
-        password_frame.pack()
-        
-        self.password_entry = tk.Entry(password_frame, show='*', width=30, font=('Arial', 10))
-        self.password_entry.pack(side='left', padx=5)
-        
-        set_password_btn = tk.Button(
-            password_frame,
-            text="Set Password",
-            command=self.set_password,
-            bg='#FF9800',
-            fg='white'
-        )
-        set_password_btn.pack(side='left')
-        
-        save_btn = tk.Button(
-            scrollable_frame,
-            text="Save Settings",
-            command=self.save_settings,
-            font=('Arial', 12, 'bold'),
-            bg='#4CAF50',
-            fg='white',
-            padx=30,
-            pady=10
-        )
-        save_btn.pack(pady=20)
-        
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
 
     def start_focus_session(self):
         """Start a focus lock session"""
@@ -771,7 +267,7 @@ Hard Mode prevents early stopping (enable in Settings)
             self.lock_end_time = None
             self.remove_blocks()
             self.root.after(0, self.update_focus_ui)
-            self.root.after(0, self.update_dashboard)
+            self.root.after(0, self.dashboard_tab.update_dashboard)
             
             if self.lock_state_file.exists():
                 self.lock_state_file.unlink()
@@ -1062,7 +558,7 @@ Remember:
             self.post_process_schedule(meals_count, todays_events)
             self.save_json(self.schedule_file, self.schedule)
             self.display_schedule()
-            self.update_dashboard()
+            self.dashboard_tab.update_dashboard()
             
             messagebox.showinfo("Success", "Daily plan generated!")
             
