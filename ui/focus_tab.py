@@ -266,3 +266,5 @@ Hard Mode prevents early stopping (enable in Settings)
 
             self.app.start_btn.config(state="normal")
             self.app.stop_btn.config(state="disabled")
+
+        return tab

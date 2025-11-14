@@ -190,14 +190,6 @@ class FocusGuardian:
         self.notebook.select(1)
         self.focus_tab.start()
 
-
-
-
-
-
-
-
-
     def reset_stats(self):
         """Reset all statistics"""
         if messagebox.askyesno("Reset Stats", "Are you sure you want to reset all statistics?"):
@@ -465,6 +457,7 @@ Remember:
             self.save_json(self.schedule_file, self.schedule)
             self.planner_tab.display_schedule()
             self.dashboard_tab.update_dashboard()
+
             
             messagebox.showinfo("Success", "Daily plan generated!")
             
