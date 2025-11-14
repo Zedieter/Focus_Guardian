@@ -7,6 +7,8 @@ import time
 from pathlib import Path
 import hashlib
 
+from ui.planner_tab import PlannerTab
+
 try:
     import pytz
     HAS_PYTZ = True
@@ -439,60 +441,9 @@ Hard Mode prevents early stopping (enable in Settings)
             self.update_focus_ui()
 
     def create_planner_tab(self):
-        """AI planner tab"""
-        tab = tk.Frame(self.notebook, bg=self.colors['bg'])
-        self.notebook.add(tab, text="🤖 AI Planner")
-        
-        header = tk.Frame(tab, bg=self.colors['card'])
-        header.pack(fill='x', pady=(20, 0), padx=20)
-        
-        title = tk.Label(
-            header,
-            text="AI Daily Planner",
-            font=('Arial', 24, 'bold'),
-            bg=self.colors['card'],
-            fg=self.colors['text']
-        )
-        title.pack(pady=20)
-        
-        generate_btn = tk.Button(
-            tab,
-            text="✨ Generate Today's Plan",
-            command=self.generate_daily_plan,
-            font=('Arial', 14, 'bold'),
-            bg=self.colors['primary'],
-            fg='white',
-            padx=40,
-            pady=18,
-            relief='flat',
-            cursor='hand2'
-        )
-        generate_btn.pack(pady=15)
-        
-        schedule_frame = tk.Frame(tab, bg=self.colors['card'], relief='solid', bd=1)
-        schedule_frame.pack(fill='both', expand=True, padx=20, pady=10)
-        
-        tk.Label(
-            schedule_frame,
-            text="📋 Today's Schedule:",
-            font=('Arial', 14, 'bold'),
-            bg=self.colors['card'],
-            fg=self.colors['text']
-        ).pack(pady=15, padx=15, anchor='w')
-        
-        self.schedule_display = scrolledtext.ScrolledText(
-            schedule_frame,
-            height=20,
-            font=('Consolas', 11),
-            wrap='word',
-            bg='#f8fafc',
-            relief='flat',
-            padx=10,
-            pady=10
-        )
-        self.schedule_display.pack(fill='both', expand=True, padx=15, pady=(0, 15))
-        
-        self.display_schedule()
+        """Create the AI planner tab using the PlannerTab helper"""
+        self.planner_tab = PlannerTab(self)
+        self.planner_tab.create()
 
     def create_schedule_tab(self):
         """Schedule and tasks management tab"""
