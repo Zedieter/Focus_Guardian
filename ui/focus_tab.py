@@ -1,6 +1,10 @@
 """Focus lock tab UI."""
 
+import datetime
+import threading
+import time
 import tkinter as tk
+from tkinter import messagebox
 
 
 class FocusLockTab:
@@ -79,7 +83,7 @@ class FocusLockTab:
         app.start_btn = tk.Button(
             button_frame,
             text="🚀 Start Focus Session",
-            command=app.start_focus_session,
+            command=self.start,
             font=("Arial", 16, "bold"),
             bg=app.colors["success"],
             fg="white",
@@ -94,7 +98,7 @@ class FocusLockTab:
         app.stop_btn = tk.Button(
             button_frame,
             text="⏹️ Stop Session",
-            command=app.stop_focus_session,
+            command=self.stop,
             font=("Arial", 16, "bold"),
             bg=app.colors["danger"],
             fg="white",
@@ -130,6 +134,138 @@ Hard Mode prevents early stopping (enable in Settings)
         ).pack(pady=20, padx=20)
 
         if app.lock_active:
+            self.update_timer()
+
+        return tab
+
+    def start(self):
+        """Public wrapper to start a focus session."""
+        return self.start_focus_session()
+
+    def stop(self):
+        """Public wrapper to stop a focus session."""
+        return self.stop_focus_session()
+
+    def update_timer(self):
+        """Public wrapper to refresh the timer display."""
+        return self.update_focus_ui()
+
+    def start_focus_session(self):
+        """Start a focus lock session."""
+        admin_check = getattr(self.app, "is_admin", None)
+        if not callable(admin_check) or not admin_check():
+            messagebox.showerror(
+                "Admin Required",
+                "Please run as administrator to enable focus lock.",
+            )
+            return
+
+        duration = int(self.app.duration_var.get())
+        self.app.lock_end_time = datetime.datetime.now() + datetime.timedelta(
+            minutes=duration
+        )
+        self.app.lock_active = True
+
+        self.app.save_json(
+            self.app.lock_state_file,
+            {
+                "end_time": self.app.lock_end_time.isoformat(),
+                "hard_mode": self.app.config["hard_mode"],
+            },
+        )
+
+        self.app.apply_blocks()
+        self.update_focus_ui()
+
+        self.app.lock_thread = threading.Thread(
+            target=self.lock_countdown,
+            daemon=True,
+        )
+        self.app.lock_thread.start()
+
+        messagebox.showinfo(
+            "Focus Lock Active",
+            f"Focus mode enabled for {duration} minutes!",
+        )
+
+    def stop_focus_session(self):
+        """Stop the focus session."""
+        if self.app.config["hard_mode"]:
+            messagebox.showwarning(
+                "Hard Mode",
+                "Hard mode is enabled. Session cannot be stopped early!",
+            )
+            return
+
+        self.app.lock_active = False
+        self.app.lock_end_time = None
+        self.app.remove_blocks()
+        self.update_focus_ui()
+
+        if self.app.lock_state_file.exists():
+            self.app.lock_state_file.unlink()
+
+        messagebox.showinfo("Focus Lock", "Focus session stopped.")
+
+    def lock_countdown(self):
+        """Background thread to monitor lock time."""
+        while self.app.lock_active and datetime.datetime.now() < self.app.lock_end_time:
+            time.sleep(1)
+            self.app.root.after(0, self.update_focus_ui)
+
+        if self.app.lock_active:
+            duration = int(self.app.duration_var.get())
+            self.app.update_stats(duration)
+
+            self.app.lock_active = False
+            self.app.lock_end_time = None
+            self.app.remove_blocks()
+            self.app.root.after(0, self.update_focus_ui)
+            self.app.root.after(0, self.app.dashboard_tab.update_dashboard)
+
+            if self.app.lock_state_file.exists():
+                self.app.lock_state_file.unlink()
+
+            self.app.root.after(
+                0,
+                lambda: messagebox.showinfo(
+                    "🎉 Session Complete!",
+                    f"Great job! You completed a {duration} minute focus session.\n\n"
+                    f"Total focus time: {self.app.stats['total_focus_time'] // 60}h "
+                    f"{self.app.stats['total_focus_time'] % 60}m",
+                ),
+            )
+
+    def update_focus_ui(self):
+        """Update the focus tab UI."""
+        if self.app.lock_active and self.app.lock_end_time:
+            remaining = self.app.lock_end_time - datetime.datetime.now()
+            minutes = int(remaining.total_seconds() // 60)
+            seconds = int(remaining.total_seconds() % 60)
+
+            self.app.status_label.config(
+                text=f"🔒 Focus Mode Active\n⏱️ {minutes:02d}:{seconds:02d} Remaining",
+                fg="white",
+                font=("Arial", 18, "bold"),
+            )
+            self.app.status_frame.config(bg="#10b981")
+            self.app.status_label.config(bg="#10b981")
+
+            self.app.start_btn.config(state="disabled")
+            self.app.stop_btn.config(
+                state="normal" if not self.app.config["hard_mode"] else "disabled"
+            )
+        else:
+            self.app.status_label.config(
+                text="✨ Ready to Focus\nNo active session",
+                fg=self.app.colors["text"],
+                font=("Arial", 16),
+            )
+            self.app.status_frame.config(bg="#e0e7ff")
+            self.app.status_label.config(bg="#e0e7ff")
+
+            self.app.start_btn.config(state="normal")
+            self.app.stop_btn.config(state="disabled")
             app.update_focus_ui()
 
         return tab

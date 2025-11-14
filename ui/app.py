@@ -40,6 +40,12 @@ class FocusGuardian:
         }
         
         self.root.configure(bg=self.colors['bg'])
+
+        admin_check = globals().get("is_admin")
+        if callable(admin_check):
+            self.is_admin = admin_check
+        else:
+            self.is_admin = lambda: False
         
         # Data directory
         self.data_dir = Path.home() / ".focus_guardian"
@@ -169,7 +175,10 @@ class FocusGuardian:
         self.dashboard_tab.create()
         self.focus_tab = FocusLockTab(self)
         self.focus_tab.create()
-        self.create_planner_tab()
+
+        self.planner_tab = PlannerTab(self)
+        self.planner_tab.create()
+
         self.create_schedule_tab()
         self.stats_tab = StatsTab(self)
         self.stats_tab.create()
@@ -180,12 +189,7 @@ class FocusGuardian:
         """Quick focus session from dashboard"""
         self.duration_var.set(str(minutes))
         self.notebook.select(1)
-        self.start_focus_session()
-
-    def create_planner_tab(self):
-        """Create the AI planner tab using the PlannerTab helper"""
-        self.planner_tab = PlannerTab(self)
-        self.planner_tab.create()
+        self.focus_tab.start()
 
     def create_schedule_tab(self):
         self.schedule_tab = ScheduleTab(self)
@@ -214,70 +218,6 @@ class FocusGuardian:
             self.dashboard_tab.update_dashboard()
             messagebox.showinfo("Stats Reset", "All statistics have been reset!")
 
-    def start_focus_session(self):
-        """Start a focus lock session"""
-        if not is_admin():
-            messagebox.showerror("Admin Required", "Please run as administrator to enable focus lock.")
-            return
-        
-        duration = int(self.duration_var.get())
-        self.lock_end_time = datetime.datetime.now() + datetime.timedelta(minutes=duration)
-        self.lock_active = True
-        
-        self.save_json(self.lock_state_file, {
-            'end_time': self.lock_end_time.isoformat(),
-            'hard_mode': self.config['hard_mode']
-        })
-        
-        self.apply_blocks()
-        self.update_focus_ui()
-        
-        self.lock_thread = threading.Thread(target=self.lock_countdown, daemon=True)
-        self.lock_thread.start()
-        
-        messagebox.showinfo("Focus Lock Active", f"Focus mode enabled for {duration} minutes!")
-
-    def stop_focus_session(self):
-        """Stop the focus session"""
-        if self.config['hard_mode']:
-            messagebox.showwarning("Hard Mode", "Hard mode is enabled. Session cannot be stopped early!")
-            return
-        
-        self.lock_active = False
-        self.lock_end_time = None
-        self.remove_blocks()
-        self.update_focus_ui()
-        
-        if self.lock_state_file.exists():
-            self.lock_state_file.unlink()
-        
-        messagebox.showinfo("Focus Lock", "Focus session stopped.")
-
-    def lock_countdown(self):
-        """Background thread to monitor lock time"""
-        while self.lock_active and datetime.datetime.now() < self.lock_end_time:
-            time.sleep(1)
-            self.root.after(0, self.update_focus_ui)
-        
-        if self.lock_active:
-            duration = int(self.duration_var.get())
-            self.update_stats(duration)
-            
-            self.lock_active = False
-            self.lock_end_time = None
-            self.remove_blocks()
-            self.root.after(0, self.update_focus_ui)
-            self.root.after(0, self.dashboard_tab.update_dashboard)
-            
-            if self.lock_state_file.exists():
-                self.lock_state_file.unlink()
-            
-            self.root.after(0, lambda: messagebox.showinfo(
-                "🎉 Session Complete!",
-                f"Great job! You completed a {duration} minute focus session.\n\n"
-                f"Total focus time: {self.stats['total_focus_time'] // 60}h {self.stats['total_focus_time'] % 60}m"
-            ))
-
     def update_stats(self, duration_minutes):
         """Update statistics after a successful session"""
         self.stats['total_focus_time'] += duration_minutes
@@ -304,35 +244,6 @@ class FocusGuardian:
         
         self.stats['last_session_date'] = today
         self.save_json(self.stats_file, self.stats)
-
-    def update_focus_ui(self):
-        """Update the focus tab UI"""
-        if self.lock_active and self.lock_end_time:
-            remaining = self.lock_end_time - datetime.datetime.now()
-            minutes = int(remaining.total_seconds() // 60)
-            seconds = int(remaining.total_seconds() % 60)
-            
-            self.status_label.config(
-                text=f"🔒 Focus Mode Active\n⏱️ {minutes:02d}:{seconds:02d} Remaining",
-                fg='white',
-                font=('Arial', 18, 'bold')
-            )
-            self.status_frame.config(bg='#10b981')
-            self.status_label.config(bg='#10b981')
-            
-            self.start_btn.config(state='disabled')
-            self.stop_btn.config(state='normal' if not self.config['hard_mode'] else 'disabled')
-        else:
-            self.status_label.config(
-                text="✨ Ready to Focus\nNo active session",
-                fg=self.colors['text'],
-                font=('Arial', 16)
-            )
-            self.status_frame.config(bg='#e0e7ff')
-            self.status_label.config(bg='#e0e7ff')
-            
-            self.start_btn.config(state='normal')
-            self.stop_btn.config(state='disabled')
 
     def apply_blocks(self):
         """Apply website and app blocks"""
@@ -557,8 +468,8 @@ Remember:
             self.schedule = json.loads(content.strip())
             self.post_process_schedule(meals_count, todays_events)
             self.save_json(self.schedule_file, self.schedule)
-            self.display_schedule()
-            self.dashboard_tab.update_dashboard()
+            self.planner_tab.display_schedule()
+
             
             messagebox.showinfo("Success", "Daily plan generated!")
             
@@ -4763,35 +4674,6 @@ Remember:
         self.sanitize_filler_blocks(new_blocks)
         self.schedule['blocks'] = new_blocks
 
-    def display_schedule(self):
-        """Display the current schedule"""
-        self.schedule_display.delete('1.0', 'end')
-        
-        today = datetime.datetime.now().strftime("%A, %B %d, %Y")
-        
-        self.schedule_display.insert('end', f"📅 TODAY'S SCHEDULE - {today}\n", 'title')
-        self.schedule_display.insert('end', "─" * 60 + "\n\n")
-        
-        for block in self.schedule['blocks']:
-            is_focus = block.get('focus_required')
-            icon = "🔒 " if is_focus else "⏰ "
-            
-            start_12 = self.convert_to_12hr(block['start'])
-            end_12 = self.convert_to_12hr(block['end'])
-            
-            time_tag = 'focus_time' if is_focus else 'time'
-            
-            self.schedule_display.insert('end', icon)
-            self.schedule_display.insert('end', f"{start_12} - {end_12}\n", time_tag)
-            self.schedule_display.insert('end', f"   {block['title']}\n", 'block_title')
-            
-            if is_focus:
-                self.schedule_display.insert('end', "   🎯 Focus Block - Distractions will be blocked\n", 'type_label')
-            else:
-                self.schedule_display.insert('end', f"   Type: {block['type']}\n", 'type_label')
-            
-            self.schedule_display.insert('end', "\n")
-
     def monitor_schedule_locks(self):
         """Check if current time matches a focus block"""
         def check_schedule():
@@ -4809,7 +4691,7 @@ Remember:
                                 self.lock_end_time = end_time
                                 self.lock_active = True
                                 self.apply_blocks()
-                                self.root.after(0, self.update_focus_ui)
+                                self.root.after(0, self.focus_tab.update_timer)
                                 break
                 
                 time.sleep(60)
