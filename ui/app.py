@@ -9,6 +9,8 @@ import hashlib
 
 from ui.focus_tab import FocusLockTab
 from ui.planner_tab import PlannerTab
+from ui.schedule_tab import ScheduleTab
+from ui.settings_tab import SettingsTab
 from ui.stats_tab import StatsTab
 
 try:
@@ -169,7 +171,8 @@ class FocusGuardian:
         self.create_schedule_tab()
         self.stats_tab = StatsTab(self)
         self.stats_tab.create()
-        self.create_settings_tab()
+        self.settings_tab = SettingsTab(self)
+        self.settings_tab.create()
 
     def create_dashboard_tab(self):
         """Dashboard overview tab"""
@@ -352,79 +355,6 @@ class FocusGuardian:
             self.notebook.select(0)
             self.update_dashboard()
             messagebox.showinfo("Stats Reset", "All statistics have been reset!")
-
-    def create_settings_tab(self):
-        """Settings and configuration tab"""
-        tab = ttk.Frame(self.notebook)
-        self.notebook.add(tab, text="⚙️ Settings")
-        
-        canvas = tk.Canvas(tab)
-        scrollbar = ttk.Scrollbar(tab, orient="vertical", command=canvas.yview)
-        scrollable_frame = ttk.Frame(canvas)
-        
-        scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-        )
-        
-        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-        
-        tk.Label(scrollable_frame, text="Blocked Websites", font=('Arial', 12, 'bold')).pack(pady=10)
-        self.sites_text = scrolledtext.ScrolledText(scrollable_frame, height=8, font=('Arial', 10))
-        self.sites_text.pack(fill='x', padx=20)
-        self.sites_text.insert('1.0', '\n'.join(self.config['blocked_sites']))
-        
-        tk.Label(scrollable_frame, text="Blocked Applications", font=('Arial', 12, 'bold')).pack(pady=10)
-        self.apps_text = scrolledtext.ScrolledText(scrollable_frame, height=8, font=('Arial', 10))
-        self.apps_text.pack(fill='x', padx=20)
-        self.apps_text.insert('1.0', '\n'.join(self.config['blocked_apps']))
-        
-        self.hard_mode_var = tk.BooleanVar(value=self.config['hard_mode'])
-        hard_mode_check = tk.Checkbutton(
-            scrollable_frame,
-            text="Hard Mode (Cannot stop sessions early)",
-            variable=self.hard_mode_var,
-            font=('Arial', 11, 'bold'),
-            fg='#f44336'
-        )
-        hard_mode_check.pack(pady=10)
-        
-        tk.Label(scrollable_frame, text="OpenAI API Key", font=('Arial', 12, 'bold')).pack(pady=10)
-        self.api_key_entry = tk.Entry(scrollable_frame, width=50, show='*', font=('Arial', 10))
-        self.api_key_entry.pack()
-        self.api_key_entry.insert(0, self.config.get('api_key', ''))
-        
-        tk.Label(scrollable_frame, text="Settings Password", font=('Arial', 12, 'bold')).pack(pady=10)
-        password_frame = tk.Frame(scrollable_frame)
-        password_frame.pack()
-        
-        self.password_entry = tk.Entry(password_frame, show='*', width=30, font=('Arial', 10))
-        self.password_entry.pack(side='left', padx=5)
-        
-        set_password_btn = tk.Button(
-            password_frame,
-            text="Set Password",
-            command=self.set_password,
-            bg='#FF9800',
-            fg='white'
-        )
-        set_password_btn.pack(side='left')
-        
-        save_btn = tk.Button(
-            scrollable_frame,
-            text="Save Settings",
-            command=self.save_settings,
-            font=('Arial', 12, 'bold'),
-            bg='#4CAF50',
-            fg='white',
-            padx=30,
-            pady=10
-        )
-        save_btn.pack(pady=20)
-        
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
 
     def start_focus_session(self):
         """Start a focus lock session"""
