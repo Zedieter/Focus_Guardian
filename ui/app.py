@@ -175,7 +175,8 @@ class FocusGuardian:
         self.dashboard_tab.create()
         self.focus_tab = FocusLockTab(self)
         self.focus_tab.create()
-        self.create_planner_tab()
+        self.planner_tab = PlannerTab(self)
+        self.planner_tab.create()
         self.create_schedule_tab()
         self.stats_tab = StatsTab(self)
         self.stats_tab.create()
@@ -187,11 +188,6 @@ class FocusGuardian:
         self.duration_var.set(str(minutes))
         self.notebook.select(1)
         self.focus_tab.start()
-
-    def create_planner_tab(self):
-        """Create the AI planner tab using the PlannerTab helper"""
-        self.planner_tab = PlannerTab(self)
-        self.planner_tab.create()
 
     def create_schedule_tab(self):
         self.schedule_tab = ScheduleTab(self)
@@ -470,7 +466,7 @@ Remember:
             self.schedule = json.loads(content.strip())
             self.post_process_schedule(meals_count, todays_events)
             self.save_json(self.schedule_file, self.schedule)
-            self.display_schedule()
+            self.planner_tab.display_schedule()
             self.dashboard_tab.update_dashboard()
             
             messagebox.showinfo("Success", "Daily plan generated!")
@@ -4675,35 +4671,6 @@ Remember:
 
         self.sanitize_filler_blocks(new_blocks)
         self.schedule['blocks'] = new_blocks
-
-    def display_schedule(self):
-        """Display the current schedule"""
-        self.schedule_display.delete('1.0', 'end')
-        
-        today = datetime.datetime.now().strftime("%A, %B %d, %Y")
-        
-        self.schedule_display.insert('end', f"📅 TODAY'S SCHEDULE - {today}\n", 'title')
-        self.schedule_display.insert('end', "─" * 60 + "\n\n")
-        
-        for block in self.schedule['blocks']:
-            is_focus = block.get('focus_required')
-            icon = "🔒 " if is_focus else "⏰ "
-            
-            start_12 = self.convert_to_12hr(block['start'])
-            end_12 = self.convert_to_12hr(block['end'])
-            
-            time_tag = 'focus_time' if is_focus else 'time'
-            
-            self.schedule_display.insert('end', icon)
-            self.schedule_display.insert('end', f"{start_12} - {end_12}\n", time_tag)
-            self.schedule_display.insert('end', f"   {block['title']}\n", 'block_title')
-            
-            if is_focus:
-                self.schedule_display.insert('end', "   🎯 Focus Block - Distractions will be blocked\n", 'type_label')
-            else:
-                self.schedule_display.insert('end', f"   Type: {block['type']}\n", 'type_label')
-            
-            self.schedule_display.insert('end', "\n")
 
     def monitor_schedule_locks(self):
         """Check if current time matches a focus block"""
