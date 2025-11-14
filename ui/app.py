@@ -175,8 +175,10 @@ class FocusGuardian:
         self.dashboard_tab.create()
         self.focus_tab = FocusLockTab(self)
         self.focus_tab.create()
+
         self.planner_tab = PlannerTab(self)
         self.planner_tab.create()
+
         self.create_schedule_tab()
         self.stats_tab = StatsTab(self)
         self.stats_tab.create()
@@ -467,7 +469,7 @@ Remember:
             self.post_process_schedule(meals_count, todays_events)
             self.save_json(self.schedule_file, self.schedule)
             self.planner_tab.display_schedule()
-            self.dashboard_tab.update_dashboard()
+
             
             messagebox.showinfo("Success", "Daily plan generated!")
             
