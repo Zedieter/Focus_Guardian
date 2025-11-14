@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 import hashlib
 
+from ui.dashboard_tab import DashboardTab
 from ui.focus_tab import FocusLockTab
 from ui.planner_tab import PlannerTab
 from ui.schedule_tab import ScheduleTab
@@ -164,7 +165,8 @@ class FocusGuardian:
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(fill='both', expand=True, padx=0, pady=0)
         
-        self.create_dashboard_tab()
+        self.dashboard_tab = DashboardTab(self)
+        self.dashboard_tab.create()
         self.focus_tab = FocusLockTab(self)
         self.focus_tab.create()
         self.create_planner_tab()
