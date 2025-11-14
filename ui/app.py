@@ -9,6 +9,7 @@ import hashlib
 
 from ui.focus_tab import FocusLockTab
 from ui.planner_tab import PlannerTab
+from ui.stats_tab import StatsTab
 
 try:
     import pytz
@@ -166,7 +167,8 @@ class FocusGuardian:
         self.focus_tab.create()
         self.create_planner_tab()
         self.create_schedule_tab()
-        self.create_stats_tab()
+        self.stats_tab = StatsTab(self)
+        self.stats_tab.create()
         self.create_settings_tab()
 
     def create_dashboard_tab(self):
@@ -335,179 +337,6 @@ class FocusGuardian:
 
 
 
-
-    def create_stats_tab(self):
-        """Statistics and achievements tab"""
-        tab = tk.Frame(self.notebook, bg=self.colors['bg'])
-        self.notebook.add(tab, text="📈 Stats")
-        
-        header = tk.Frame(tab, bg=self.colors['card'])
-        header.pack(fill='x', pady=(20, 0), padx=20)
-        
-        tk.Label(
-            header,
-            text="Your Progress & Achievements",
-            font=('Arial', 24, 'bold'),
-            bg=self.colors['card'],
-            fg=self.colors['text']
-        ).pack(pady=20)
-        
-        stats_grid = tk.Frame(tab, bg=self.colors['bg'])
-        stats_grid.pack(fill='both', expand=True, padx=30, pady=20)
-        
-        row1 = tk.Frame(stats_grid, bg=self.colors['bg'])
-        row1.pack(fill='x', pady=10)
-        
-        self.create_large_stat_card(
-            row1,
-            "⏱️ Total Focus Time",
-            f"{self.stats['total_focus_time'] // 60}h {self.stats['total_focus_time'] % 60}m",
-            "Time spent in deep focus",
-            self.colors['primary']
-        ).pack(side='left', fill='both', expand=True, padx=10)
-        
-        self.create_large_stat_card(
-            row1,
-            "✅ Sessions Completed",
-            str(self.stats['sessions_completed']),
-            "Successful focus sessions",
-            self.colors['success']
-        ).pack(side='left', fill='both', expand=True, padx=10)
-        
-        row2 = tk.Frame(stats_grid, bg=self.colors['bg'])
-        row2.pack(fill='x', pady=10)
-        
-        self.create_large_stat_card(
-            row2,
-            "🔥 Current Streak",
-            f"{self.stats['current_streak']} days",
-            "Consecutive days of focus",
-            self.colors['warning']
-        ).pack(side='left', fill='both', expand=True, padx=10)
-        
-        self.create_large_stat_card(
-            row2,
-            "🏆 Longest Streak",
-            f"{self.stats['longest_streak']} days",
-            "Your personal best",
-            self.colors['info']
-        ).pack(side='left', fill='both', expand=True, padx=10)
-        
-        achievements = tk.Frame(tab, bg=self.colors['card'], relief='solid', bd=1)
-        achievements.pack(fill='x', padx=30, pady=20)
-        
-        tk.Label(
-            achievements,
-            text="🎖️ Achievements",
-            font=('Arial', 16, 'bold'),
-            bg=self.colors['card'],
-            fg=self.colors['text']
-        ).pack(pady=15, padx=15, anchor='w')
-        
-        badge_frame = tk.Frame(achievements, bg=self.colors['card'])
-        badge_frame.pack(fill='x', padx=20, pady=(0, 20))
-        
-        self.show_achievement_badges(badge_frame)
-        
-        tk.Button(
-            tab,
-            text="🔄 Reset Statistics",
-            command=self.reset_stats,
-            font=('Arial', 10),
-            bg=self.colors['danger'],
-            fg='white',
-            padx=20,
-            pady=10,
-            relief='flat',
-            cursor='hand2'
-        ).pack(pady=10)
-
-    def create_large_stat_card(self, parent, title, value, subtitle, color):
-        """Create a large statistics card"""
-        card = tk.Frame(parent, bg=self.colors['card'], relief='solid', bd=1)
-        
-        header = tk.Frame(card, bg=color, height=10)
-        header.pack(fill='x')
-        header.pack_propagate(False)
-        
-        tk.Label(
-            card,
-            text=title,
-            font=('Arial', 12, 'bold'),
-            bg=self.colors['card'],
-            fg=self.colors['text']
-        ).pack(pady=(15, 5))
-        
-        tk.Label(
-            card,
-            text=value,
-            font=('Arial', 32, 'bold'),
-            bg=self.colors['card'],
-            fg=color
-        ).pack(pady=10)
-        
-        tk.Label(
-            card,
-            text=subtitle,
-            font=('Arial', 9),
-            bg=self.colors['card'],
-            fg=self.colors['text_light']
-        ).pack(pady=(0, 15))
-        
-        return card
-
-    def show_achievement_badges(self, parent):
-        """Display achievement badges"""
-        achievements = [
-            ("🌱", "First Step", self.stats['sessions_completed'] >= 1, "Complete your first session"),
-            ("💪", "Consistent", self.stats['current_streak'] >= 3, "3 day streak"),
-            ("🔥", "On Fire", self.stats['current_streak'] >= 7, "7 day streak"),
-            ("⭐", "Focused", self.stats['total_focus_time'] >= 300, "5+ hours of focus"),
-            ("🏆", "Master", self.stats['sessions_completed'] >= 50, "50+ sessions"),
-        ]
-        
-        for emoji, name, unlocked, desc in achievements:
-            # Badge container
-            badge_container = tk.Frame(parent, bg=self.colors['card'])
-            badge_container.pack(side='left', padx=15, pady=10)
-            
-            # Badge card
-            badge_card = tk.Frame(
-                badge_container,
-                bg='#10b981' if unlocked else '#e5e7eb',
-                relief='solid',
-                bd=2,
-                width=100,
-                height=100
-            )
-            badge_card.pack()
-            badge_card.pack_propagate(False)
-            
-            # Emoji
-            tk.Label(
-                badge_card,
-                text=emoji,
-                font=('Arial', 36),
-                bg='#10b981' if unlocked else '#e5e7eb'
-            ).pack(expand=True)
-            
-            # Name
-            tk.Label(
-                badge_container,
-                text=name,
-                font=('Arial', 10, 'bold'),
-                fg=self.colors['text'],
-                bg=self.colors['card']
-            ).pack(pady=(5, 2))
-            
-            # Description
-            tk.Label(
-                badge_container,
-                text=desc,
-                font=('Arial', 8),
-                fg=self.colors['text_light'],
-                bg=self.colors['card']
-            ).pack()
 
     def reset_stats(self):
         """Reset all statistics"""
