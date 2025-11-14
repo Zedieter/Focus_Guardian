@@ -175,11 +175,10 @@ class FocusGuardian:
         self.dashboard_tab.create()
         self.focus_tab = FocusLockTab(self)
         self.focus_tab.create()
-
         self.planner_tab = PlannerTab(self)
         self.planner_tab.create()
-
-        self.create_schedule_tab()
+        self.schedule_tab = ScheduleTab(self)
+        self.schedule_tab.create()
         self.stats_tab = StatsTab(self)
         self.stats_tab.create()
         self.settings_tab = SettingsTab(self)
@@ -190,18 +189,6 @@ class FocusGuardian:
         self.duration_var.set(str(minutes))
         self.notebook.select(1)
         self.focus_tab.start()
-
-    def create_schedule_tab(self):
-        self.schedule_tab = ScheduleTab(self)
-        self.schedule_tab.create()
-
-
-
-
-
-
-
-
 
     def reset_stats(self):
         """Reset all statistics"""
@@ -469,6 +456,7 @@ Remember:
             self.post_process_schedule(meals_count, todays_events)
             self.save_json(self.schedule_file, self.schedule)
             self.planner_tab.display_schedule()
+            self.dashboard_tab.update_dashboard()
 
             
             messagebox.showinfo("Success", "Daily plan generated!")
