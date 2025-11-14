@@ -8,7 +8,6 @@ from pathlib import Path
 import hashlib
 
 from ui.planner_tab import PlannerTab
-from ui.schedule_tab import ScheduleTab
 
 try:
     import pytz
