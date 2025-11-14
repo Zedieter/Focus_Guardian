@@ -102,7 +102,7 @@ class DashboardTab:
             cursor='hand2'
         ).pack(side='left', padx=5)
 
-        app.update_dashboard()
+        self.update_dashboard()
 
     def _create_stat_card(self, parent, title, value, color):
         card = tk.Frame(parent, bg=self.app.colors['card'], relief='solid', bd=1)
@@ -127,3 +127,38 @@ class DashboardTab:
         ).pack(pady=15)
 
         return card
+
+    def update_dashboard(self):
+        app = self.app
+
+        schedule_widget = getattr(app, 'dashboard_schedule', None)
+        if schedule_widget is None:
+            return
+
+        schedule_widget.delete('1.0', 'end')
+
+        blocks = app.schedule.get('blocks') if isinstance(app.schedule, dict) else None
+        if not blocks:
+            schedule_widget.insert(
+                '1.0',
+                "No schedule for today.\nClick 'Generate Today's Plan' to create one!"
+            )
+            return
+
+        now = datetime.datetime.now()
+        current_time = now.strftime('%H:%M')
+
+        for block in blocks[:6]:
+            start_12 = app.convert_to_12hr(block['start'])
+            end_12 = app.convert_to_12hr(block['end'])
+
+            if block['start'] <= current_time < block['end']:
+                prefix = "▶️ "
+            else:
+                prefix = "   "
+
+            icon = "🔒" if block.get('focus_required') else "⏰"
+            schedule_widget.insert(
+                'end',
+                f"{prefix}{icon} {start_12} - {end_12}: {block['title']}\n"
+            )

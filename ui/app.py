@@ -176,150 +176,6 @@ class FocusGuardian:
         self.settings_tab = SettingsTab(self)
         self.settings_tab.create()
 
-    def create_dashboard_tab(self):
-        """Dashboard overview tab"""
-        tab = tk.Frame(self.notebook, bg=self.colors['bg'])
-        self.notebook.add(tab, text="📊 Dashboard")
-        
-        header = tk.Frame(tab, bg=self.colors['primary'], height=80)
-        header.pack(fill='x')
-        header.pack_propagate(False)
-        
-        title = tk.Label(
-            header, 
-            text="Focus Guardian",
-            font=('Arial', 24, 'bold'),
-            bg=self.colors['primary'],
-            fg='white'
-        )
-        title.pack(pady=20)
-        
-        content = tk.Frame(tab, bg=self.colors['bg'])
-        content.pack(fill='both', expand=True, padx=30, pady=30)
-        
-        stats_row = tk.Frame(content, bg=self.colors['bg'])
-        stats_row.pack(fill='x', pady=(0, 20))
-        
-        self.create_stat_card(
-            stats_row, 
-            "⏱️ Total Focus Time",
-            f"{self.stats['total_focus_time'] // 60}h {self.stats['total_focus_time'] % 60}m",
-            self.colors['primary']
-        ).pack(side='left', fill='both', expand=True, padx=5)
-        
-        self.create_stat_card(
-            stats_row,
-            "✅ Sessions Completed",
-            str(self.stats['sessions_completed']),
-            self.colors['success']
-        ).pack(side='left', fill='both', expand=True, padx=5)
-        
-        self.create_stat_card(
-            stats_row,
-            "🔥 Current Streak",
-            f"{self.stats['current_streak']} days",
-            self.colors['warning']
-        ).pack(side='left', fill='both', expand=True, padx=5)
-        
-        schedule_card = tk.Frame(content, bg=self.colors['card'], relief='solid', bd=1)
-        schedule_card.pack(fill='both', expand=True, pady=10)
-        
-        tk.Label(
-            schedule_card,
-            text="📅 Today's Schedule Preview",
-            font=('Arial', 14, 'bold'),
-            bg=self.colors['card'],
-            fg=self.colors['text']
-        ).pack(pady=15, padx=15, anchor='w')
-        
-        self.dashboard_schedule = scrolledtext.ScrolledText(
-            schedule_card,
-            height=10,
-            font=('Consolas', 10),
-            wrap='word',
-            bg='#f8fafc',
-            relief='flat'
-        )
-        self.dashboard_schedule.pack(fill='both', expand=True, padx=15, pady=(0, 15))
-        
-        actions = tk.Frame(content, bg=self.colors['bg'])
-        actions.pack(fill='x', pady=10)
-        
-        tk.Button(
-            actions,
-            text="🚀 Start Quick Focus",
-            command=lambda: self.quick_focus(25),
-            font=('Arial', 12, 'bold'),
-            bg=self.colors['primary'],
-            fg='white',
-            padx=20,
-            pady=12,
-            relief='flat',
-            cursor='hand2'
-        ).pack(side='left', padx=5)
-        
-        tk.Button(
-            actions,
-            text="🤖 Generate Today's Plan",
-            command=self.generate_daily_plan,
-            font=('Arial', 12, 'bold'),
-            bg=self.colors['info'],
-            fg='white',
-            padx=20,
-            pady=12,
-            relief='flat',
-            cursor='hand2'
-        ).pack(side='left', padx=5)
-        
-        self.update_dashboard()
-
-    def create_stat_card(self, parent, title, value, color):
-        """Create a statistics card"""
-        card = tk.Frame(parent, bg=self.colors['card'], relief='solid', bd=1)
-        
-        inner = tk.Frame(card, bg=color)
-        inner.pack(fill='x')
-        
-        tk.Label(
-            inner,
-            text=title,
-            font=('Arial', 10),
-            bg=color,
-            fg='white'
-        ).pack(pady=(10, 5))
-        
-        tk.Label(
-            card,
-            text=value,
-            font=('Arial', 24, 'bold'),
-            bg=self.colors['card'],
-            fg=self.colors['text']
-        ).pack(pady=15)
-        
-        return card
-
-    def update_dashboard(self):
-        """Update dashboard with current data"""
-        self.dashboard_schedule.delete('1.0', 'end')
-        
-        if not self.schedule.get('blocks'):
-            self.dashboard_schedule.insert('1.0', "No schedule for today.\nClick 'Generate Today's Plan' to create one!")
-        else:
-            now = datetime.datetime.now()
-            current_time = now.strftime("%H:%M")
-            
-            for block in self.schedule['blocks'][:6]:
-                start_12 = self.convert_to_12hr(block['start'])
-                end_12 = self.convert_to_12hr(block['end'])
-                
-                if block['start'] <= current_time < block['end']:
-                    prefix = "▶️ "
-                else:
-                    prefix = "   "
-                
-                icon = "🔒" if block.get('focus_required') else "⏰"
-                self.dashboard_schedule.insert('end', f"{prefix}{icon} {start_12} - {end_12}: {block['title']}\n")
-
     def quick_focus(self, minutes):
         """Quick focus session from dashboard"""
         self.duration_var.set(str(minutes))
@@ -355,7 +211,7 @@ class FocusGuardian:
             }
             self.save_json(self.stats_file, self.stats)
             self.notebook.select(0)
-            self.update_dashboard()
+            self.dashboard_tab.update_dashboard()
             messagebox.showinfo("Stats Reset", "All statistics have been reset!")
 
     def start_focus_session(self):
@@ -411,7 +267,7 @@ class FocusGuardian:
             self.lock_end_time = None
             self.remove_blocks()
             self.root.after(0, self.update_focus_ui)
-            self.root.after(0, self.update_dashboard)
+            self.root.after(0, self.dashboard_tab.update_dashboard)
             
             if self.lock_state_file.exists():
                 self.lock_state_file.unlink()
@@ -702,7 +558,7 @@ Remember:
             self.post_process_schedule(meals_count, todays_events)
             self.save_json(self.schedule_file, self.schedule)
             self.display_schedule()
-            self.update_dashboard()
+            self.dashboard_tab.update_dashboard()
             
             messagebox.showinfo("Success", "Daily plan generated!")
             
