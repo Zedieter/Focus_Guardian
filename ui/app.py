@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 import hashlib
 
+from ui.focus_tab import FocusLockTab
 from ui.planner_tab import PlannerTab
 
 try:
@@ -161,7 +162,8 @@ class FocusGuardian:
         self.notebook.pack(fill='both', expand=True, padx=0, pady=0)
         
         self.create_dashboard_tab()
-        self.create_focus_tab()
+        self.focus_tab = FocusLockTab(self)
+        self.focus_tab.create()
         self.create_planner_tab()
         self.create_schedule_tab()
         self.create_stats_tab()
@@ -316,129 +318,6 @@ class FocusGuardian:
         self.duration_var.set(str(minutes))
         self.notebook.select(1)
         self.start_focus_session()
-
-    def create_focus_tab(self):
-        """Main focus lock tab"""
-        tab = tk.Frame(self.notebook, bg=self.colors['bg'])
-        self.notebook.add(tab, text="🔒 Focus Lock")
-        
-        title_frame = tk.Frame(tab, bg=self.colors['card'])
-        title_frame.pack(fill='x', pady=(20, 0), padx=20)
-        
-        title = tk.Label(
-            title_frame,
-            text="Focus Session",
-            font=('Arial', 28, 'bold'),
-            bg=self.colors['card'],
-            fg=self.colors['text']
-        )
-        title.pack(pady=20)
-        
-        self.status_frame = tk.Frame(tab, bg='#e0e7ff', relief='flat', bd=0)
-        self.status_frame.pack(pady=20, padx=40, fill='x', ipady=20)
-        
-        self.status_label = tk.Label(
-            self.status_frame, 
-            text="✨ Ready to Focus\nNo active session",
-            font=('Arial', 16),
-            bg='#e0e7ff',
-            fg=self.colors['text']
-        )
-        self.status_label.pack(pady=15)
-        
-        duration_frame = tk.Frame(tab, bg=self.colors['bg'])
-        duration_frame.pack(pady=30)
-        
-        tk.Label(
-            duration_frame,
-            text="Choose Focus Duration:",
-            font=('Arial', 13),
-            bg=self.colors['bg'],
-            fg=self.colors['text']
-        ).pack(pady=(0, 10))
-        
-        button_row = tk.Frame(duration_frame, bg=self.colors['bg'])
-        button_row.pack()
-        
-        self.duration_var = tk.StringVar(value="25")
-        
-        for duration in ["25", "50", "90", "120"]:
-            btn = tk.Radiobutton(
-                button_row,
-                text=f"{duration} min",
-                variable=self.duration_var,
-                value=duration,
-                font=('Arial', 11, 'bold'),
-                bg=self.colors['card'],
-                fg=self.colors['text'],
-                selectcolor=self.colors['primary'],
-                indicatoron=False,
-                width=10,
-                relief='flat',
-                padx=15,
-                pady=10,
-                cursor='hand2'
-            )
-            btn.pack(side='left', padx=5)
-        
-        button_frame = tk.Frame(tab, bg=self.colors['bg'])
-        button_frame.pack(pady=30)
-        
-        self.start_btn = tk.Button(
-            button_frame,
-            text="🚀 Start Focus Session",
-            command=self.start_focus_session,
-            font=('Arial', 16, 'bold'),
-            bg=self.colors['success'],
-            fg='white',
-            padx=40,
-            pady=20,
-            relief='flat',
-            cursor='hand2',
-            borderwidth=0
-        )
-        self.start_btn.pack(side='left', padx=10)
-        
-        self.stop_btn = tk.Button(
-            button_frame,
-            text="⏹️ Stop Session",
-            command=self.stop_focus_session,
-            font=('Arial', 16, 'bold'),
-            bg=self.colors['danger'],
-            fg='white',
-            padx=40,
-            pady=20,
-            relief='flat',
-            cursor='hand2',
-            state='disabled',
-            borderwidth=0
-        )
-        self.stop_btn.pack(side='left', padx=10)
-        
-        info_card = tk.Frame(tab, bg=self.colors['card'], relief='solid', bd=1)
-        info_card.pack(pady=20, padx=60, fill='x')
-        
-        info_text = """
-    Focus Lock Features:
-
-Blocks distracting websites (YouTube, Reddit, TikTok, etc.)
-Blocks specified applications  
-Timer-based sessions with countdown
-Re-enables access automatically when done
-Hard Mode prevents early stopping (enable in Settings)
-        """
-        info = tk.Label(
-            info_card,
-            text=info_text,
-            font=('Arial', 11),
-            justify='left',
-            bg=self.colors['card'],
-            fg=self.colors['text_light']
-        )
-        info.pack(pady=20, padx=20)
-        
-        if self.lock_active:
-            self.update_focus_ui()
 
     def create_planner_tab(self):
         """Create the AI planner tab using the PlannerTab helper"""
